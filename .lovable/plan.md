@@ -2,64 +2,82 @@
 
 ## Probleem
 
-De database draait, maar mist alle Supabase-specifieke rollen (`anon`, `authenticated`, `authenticator`, `service_role`) en schema's (`auth`, `storage`, `realtime`). Dit komt door twee oorzaken:
+Het init SQL script heeft twee fouten:
 
-1. **`install.sh` maakt `volumes/db/data` aan vóór de container start** (regel 371). PostgreSQL ziet een niet-lege data directory en slaat alle init scripts over — inclusief de ingebouwde Supabase init scripts uit de image.
+1. **`supabase_admin` creatie faalt** — `CREATE ROLE ... REPLICATION BYPASSRLS` vereist superuser-privileges. De `supabase` user heeft die niet wanneer je via TCP (`-h localhost`) verbindt. Oplossing: verwijder `REPLICATION BYPASSRLS` (niet nodig voor de applicatie).
 
-2. **Geen init SQL voor Supabase rollen/schema's** in de infra-repo. De `supabase/postgres` image heeft ingebouwde scripts, maar die draaien alleen als de data directory leeg is bij eerste start.
+2. **`authenticator` wachtwoord wordt niet gezet** — het script gebruikt `current_setting('password.superuser', true)` wat NULL retourneert. PostgREST verbindt als `authenticator` en kan dus niet inloggen. Oplossing: gebruik `POSTGRES_PASSWORD` als environment variabele via een shell-wrapper, of zet een fallback wachtwoord.
 
-3. **`realtime` mist `APP_NAME`** environment variabele.
+3. **`pgjwt` extension bestaat niet** in deze Postgres image — niet kritiek, kan overgeslagen worden met `IF NOT EXISTS` (faalt stil als het niet beschikbaar is).
 
-## Oplossing
+## Oplossing: `volumes/db/init/00-supabase-init.sql` herschrijven
 
-### 1. Nieuw bestand: `volumes/db/init/00-supabase-init.sql`
+### Wijzigingen:
 
-SQL script dat de essentiële Supabase rollen, schema's, extensions en grants aanmaakt (idempotent met `IF NOT EXISTS`):
-
-- **Rollen:** `anon`, `authenticated`, `authenticator`, `service_role`, `supabase_admin`, `dashboard_user`, `supabase_auth_admin`, `supabase_storage_admin`, `supabase_realtime_admin`
-- **Schema's:** `auth`, `storage`, `extensions`, `realtime`, `_realtime`  
-- **Extensions:** `uuid-ossp`, `pgcrypto`, `pgjwt` (in `extensions` schema)
-- **Grants:** juiste schema-eigenaarschap en search_path per rol
-
-### 2. `install.sh` aanpassen
-
-- **Verwijder `mkdir -p volumes/db/data`** (regel 371) — laat Docker/PostgreSQL de data directory zelf aanmaken bij eerste start
-- **Kopieer init SQL** naar `$SUPABASE_DIR/volumes/db/init/` vóór `docker compose up`
-
-### 3. `docker-compose.yml` aanpassen
-
-- Voeg `APP_NAME: supabase_realtime` toe aan de `realtime` service environment
-
-### 4. Handleiding: troubleshooting sectie
-
-Voeg een "Database resetten" stap toe aan de troubleshooting sectie in `handleiding.tsx`:
-
-```bash
-cd /opt/supabase && sudo docker compose down
-sudo rm -rf /opt/supabase/volumes/db/data
-sudo docker compose up -d
+**a) `supabase_admin` — verwijder onmogelijke attributen:**
+```sql
+-- Was: CREATE ROLE supabase_admin LOGIN CREATEROLE CREATEDB REPLICATION BYPASSRLS;
+-- Wordt:
+CREATE ROLE supabase_admin LOGIN CREATEROLE CREATEDB;
 ```
 
-## Jouw server nu fixen
+**b) `authenticator` wachtwoord — gebruik hardcoded fallback + instructie:**
+```sql
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'authenticator') THEN
+    CREATE ROLE authenticator NOINHERIT LOGIN PASSWORD 'CHANGEME';
+  END IF;
+END $$;
+```
+Plus een apart `ALTER ROLE` statement dat het wachtwoord zet op basis van de `POSTGRES_PASSWORD` env var. Omdat SQL geen toegang heeft tot shell env vars, passen we `install.sh` aan om het wachtwoord via `sed` of een template in te vullen vóór het script gekopieerd wordt.
 
-Na deze wijzigingen voer je op je server uit:
+**c) `pgjwt` — maak niet-kritiek:**
+Verwijder de `pgjwt` regel of wrap in een `DO $$ BEGIN ... EXCEPTION WHEN OTHERS THEN NULL; END $$;` blok.
+
+**d) `supabase_auth_admin` — voeg LOGIN toe:**
+GoTrue's migraties vereisen dat `supabase_auth_admin` kan inloggen:
+```sql
+CREATE ROLE supabase_auth_admin NOINHERIT LOGIN CREATEROLE;
+```
+
+### `install.sh` aanpassen:
+
+Voeg een stap toe die `CHANGEME` vervangt door het werkelijke `POSTGRES_PASSWORD` in de gekopieerde init SQL:
+```bash
+sed -i "s/CHANGEME/$POSTGRES_PASSWORD/g" "$SUPABASE_DIR/volumes/db/init/00-supabase-init.sql"
+```
+
+En voeg een extra `ALTER ROLE authenticator PASSWORD` en `ALTER ROLE supabase_auth_admin PASSWORD` toe via `psql` na `docker compose up`.
+
+## Directe fix voor de server
+
+Na deze codewijzigingen, op de server:
+```bash
+# 1. Maak supabase_admin aan (zonder REPLICATION/BYPASSRLS)
+sudo docker exec -i supabase-db bash -c 'PGPASSWORD=$POSTGRES_PASSWORD psql -U supabase -d postgres -h localhost' <<'SQL'
+CREATE ROLE supabase_admin LOGIN CREATEROLE CREATEDB;
+ALTER ROLE authenticator WITH PASSWORD 'VULT_INSTALL_IN';
+ALTER ROLE supabase_auth_admin WITH LOGIN PASSWORD 'VULT_INSTALL_IN';
+SQL
+```
+(Vervang `VULT_INSTALL_IN` door het POSTGRES_PASSWORD uit `/opt/supabase/.env`)
 
 ```bash
-cd /opt/supabase && sudo docker compose down
-sudo rm -rf /opt/supabase/volumes/db/data
-cd /opt/lovable-infra && sudo git pull
-sudo cp /opt/lovable-infra/docker-compose.yml /opt/supabase/docker-compose.yml
-sudo cp /opt/lovable-infra/volumes/db/init/00-supabase-init.sql /opt/supabase/volumes/db/init/
-sudo cp /opt/lovable-infra/volumes/kong/kong.yml /opt/supabase/volumes/kong/kong.yml
-cd /opt/supabase && sudo docker compose up -d
+# 2. Restart
+cd /opt/supabase && sudo docker compose restart
 ```
+
+## Handleiding bijwerken
+
+Voeg aan de troubleshooting in `handleiding.tsx` toe:
+- Tip over `supabase_admin` fout en hoe handmatig te fixen
+- Waarschuwing dat wachtwoorden uit `.env` moeten komen
 
 ## Bestanden
 
 | Bestand | Wijziging |
 |---|---|
-| `volumes/db/init/00-supabase-init.sql` | **Nieuw** — rollen, schema's, extensions, grants |
-| `docker-compose.yml` | `APP_NAME` toevoegen aan realtime |
-| `install.sh` | Verwijder premature `mkdir volumes/db/data`, kopieer init SQL |
-| `src/routes/handleiding.tsx` | Troubleshooting: database resetten |
+| `volumes/db/init/00-supabase-init.sql` | Fix supabase_admin attributen, authenticator wachtwoord, pgjwt error handling, supabase_auth_admin LOGIN |
+| `install.sh` | `sed` stap om CHANGEME te vervangen door werkelijk wachtwoord, post-init password setup |
+| `src/routes/handleiding.tsx` | Troubleshooting: supabase_admin fout, wachtwoord-tip |
 
