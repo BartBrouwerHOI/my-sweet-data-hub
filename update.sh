@@ -28,6 +28,35 @@ APP_DIR="${APP_DIR:-/opt/lovable-app}"
 SUPABASE_DIR="${SUPABASE_DIR:-/opt/supabase}"
 MIGRATIONS_DONE_DIR="$SUPABASE_DIR/.migrations_done"
 
+# --- Strikte migratie-runner (gedeeld) ---
+run_strict_migrations() {
+  if [[ ! -d "$APP_DIR/supabase/migrations" ]]; then return 0; fi
+
+  echo "  Database migraties controleren..."
+  mkdir -p "$MIGRATIONS_DONE_DIR"
+
+  for migration in "$APP_DIR/supabase/migrations/"*.sql; do
+    [[ -f "$migration" ]] || continue
+    local_name="$(basename "$migration")"
+    if [[ ! -f "$MIGRATIONS_DONE_DIR/$local_name" ]]; then
+      echo "  Nieuwe migratie: $local_name"
+      if docker exec -i supabase-db bash -c \
+        'PGPASSWORD=$POSTGRES_PASSWORD psql -U supabase -d postgres -h localhost -v ON_ERROR_STOP=1 -X --single-transaction' \
+        < "$migration"; then
+        touch "$MIGRATIONS_DONE_DIR/$local_name"
+        echo "    ✅ Succesvol"
+      else
+        echo "    ❌ Mislukt — stoppen bij eerste fout"
+        echo ""
+        echo "  De migratie '$local_name' is mislukt."
+        echo "  Los het probleem op en draai daarna opnieuw: lovable-update"
+        return 1
+      fi
+    fi
+  done
+  return 0
+}
+
 # Detecteer installatiemodus via marker (geschreven door install.sh)
 if [[ -f "$INFRA_DIR/.install_mode" ]]; then
   INSTALL_MODE="$(cat "$INFRA_DIR/.install_mode")"
@@ -38,7 +67,6 @@ else
   elif [[ ! -d "$SUPABASE_DIR" && -d "$APP_DIR" ]]; then
     INSTALL_MODE="frontend"
   elif [[ -d "$SUPABASE_DIR" && -d "$APP_DIR" ]]; then
-    # Kan database+migraties OF full zijn — check of frontend container bestaat
     if docker ps -a --format '{{.Names}}' | grep -q '^lovable-frontend$'; then
       INSTALL_MODE="full"
     else
@@ -75,24 +103,7 @@ if [[ "$INSTALL_MODE" == "database" ]]; then
   fi
 
   echo -e "${GREEN}[3/4]${NC} Database migraties controleren..."
-  mkdir -p "$MIGRATIONS_DONE_DIR"
-  if [[ -d "$APP_DIR/supabase/migrations" ]]; then
-    for migration in "$APP_DIR/supabase/migrations/"*.sql; do
-      if [[ -f "$migration" ]]; then
-        local_name="$(basename "$migration")"
-        if [[ ! -f "$MIGRATIONS_DONE_DIR/$local_name" ]]; then
-          echo "  Nieuwe migratie: $local_name"
-          cp "$migration" "$SUPABASE_DIR/volumes/db/init/$local_name"
-          if docker exec -i supabase-db bash -c 'PGPASSWORD=$POSTGRES_PASSWORD psql -U supabase -d postgres -h localhost --single-transaction' < "$migration"; then
-            touch "$MIGRATIONS_DONE_DIR/$local_name"
-            echo "    ✅ Succesvol"
-          else
-            echo "    ❌ Mislukt — controleer handmatig"
-          fi
-        fi
-      fi
-    done
-  fi
+  run_strict_migrations || exit 1
 
   echo -e "${GREEN}[4/4]${NC} Supabase stack herstarten..."
   cd "$SUPABASE_DIR" && docker compose up -d
@@ -182,24 +193,7 @@ docker run -d \
   lovable-frontend
 
 echo -e "${GREEN}[5/5]${NC} Database migraties controleren..."
-mkdir -p "$MIGRATIONS_DONE_DIR"
-if [[ -d "$APP_DIR/supabase/migrations" ]]; then
-  for migration in "$APP_DIR/supabase/migrations/"*.sql; do
-    if [[ -f "$migration" ]]; then
-      local_name="$(basename "$migration")"
-      if [[ ! -f "$MIGRATIONS_DONE_DIR/$local_name" ]]; then
-        echo "  Nieuwe migratie: $local_name"
-        cp "$migration" "$SUPABASE_DIR/volumes/db/init/$local_name"
-        if docker exec -i supabase-db bash -c 'PGPASSWORD=$POSTGRES_PASSWORD psql -U supabase -d postgres -h localhost --single-transaction' < "$migration"; then
-          touch "$MIGRATIONS_DONE_DIR/$local_name"
-          echo "    ✅ Succesvol"
-        else
-          echo "    ❌ Mislukt — controleer handmatig"
-        fi
-      fi
-    fi
-  done
-fi
+run_strict_migrations || exit 1
 
 echo ""
 echo -e "${GREEN}✅ Update compleet!${NC}"
