@@ -270,6 +270,25 @@ clone_app() {
     break
   done
 
+  # Als we via sudo draaien, kopieer SSH keys van de oorspronkelijke gebruiker
+  if [[ -n "${SUDO_USER:-}" && "$SUDO_USER" != "root" ]]; then
+    local user_home
+    user_home=$(eval echo "~$SUDO_USER")
+    if [[ -d "$user_home/.ssh" ]]; then
+      mkdir -p /root/.ssh
+      chmod 700 /root/.ssh
+      for f in deploy_key deploy_key.pub config id_ed25519 id_ed25519.pub id_rsa id_rsa.pub; do
+        if [[ -f "$user_home/.ssh/$f" && ! -f "/root/.ssh/$f" ]]; then
+          cp "$user_home/.ssh/$f" "/root/.ssh/$f"
+        fi
+      done
+      chmod 600 /root/.ssh/deploy_key 2>/dev/null || true
+      chmod 600 /root/.ssh/id_ed25519 2>/dev/null || true
+      chmod 600 /root/.ssh/id_rsa 2>/dev/null || true
+      log_info "SSH keys gekopieerd van $SUDO_USER naar root"
+    fi
+  fi
+
   # Test SSH-verbinding met GitHub vóór clone
   log_info "SSH-verbinding met GitHub testen..."
   local ssh_output
@@ -383,13 +402,38 @@ ENVEOF
     log_info "Database init script gekopieerd en wachtwoorden ingevuld."
   fi
 
-  # Migraties komen uit de APP-repo (als die gecloned is)
+  # Migraties worden NA het opstarten via docker exec uitgevoerd (zie run_migrations)
   if [[ -d "$APP_DIR/supabase/migrations" ]]; then
-    log_info "Database migraties kopiëren vanuit app-repo..."
-    cp "$APP_DIR/supabase/migrations/"*.sql "$SUPABASE_DIR/volumes/db/init/" 2>/dev/null || true
-  else
-    log_info "Geen app-repo gevonden — migraties overgeslagen."
+    log_info "Database migraties gevonden — worden na startup uitgevoerd."
   fi
+}
+
+# --- Run migrations after Supabase is healthy ---
+run_migrations() {
+  if [[ ! -d "$APP_DIR/supabase/migrations" ]]; then return; fi
+
+  log_info "Wachten tot GoTrue/Auth klaar is (10s)..."
+  sleep 10
+
+  log_info "Database migraties uitvoeren..."
+  mkdir -p "$SUPABASE_DIR/.migrations_done"
+
+  for migration in "$APP_DIR/supabase/migrations/"*.sql; do
+    [[ -f "$migration" ]] || continue
+    local name
+    name="$(basename "$migration")"
+    if [[ ! -f "$SUPABASE_DIR/.migrations_done/$name" ]]; then
+      log_info "  Migratie: $name"
+      if docker exec -i supabase-db bash -c \
+        'PGPASSWORD=$POSTGRES_PASSWORD psql -U supabase -d postgres -h localhost --single-transaction' \
+        < "$migration"; then
+        touch "$SUPABASE_DIR/.migrations_done/$name"
+        echo "    ✅ Succesvol"
+      else
+        echo "    ❌ Mislukt — controleer handmatig"
+      fi
+    fi
+  done
 }
 
 # --- Build frontend (SPA of SSR, Dockerfile uit INFRA_DIR) ---
@@ -900,12 +944,14 @@ main() {
       setup_supabase
       build_frontend
       start_supabase
+      run_migrations
       start_frontend
       ;;
     database)
       generate_secrets
       setup_supabase
       start_supabase
+      run_migrations
       ;;
     frontend)
       build_frontend
