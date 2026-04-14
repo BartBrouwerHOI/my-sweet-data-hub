@@ -316,9 +316,16 @@ sudo bash install.sh
 
           <h4 className="mt-4 font-semibold text-foreground"><InfoTooltip text="Bepaalt welke poorten open of dicht staan op je server — beschermt tegen ongewenste toegang van buitenaf." /> instellen</h4>
           <p>Beperk toegang tot de API Gateway zodat alleen Server B erbij kan:</p>
-          <CodeBlock>{`# Vervang SERVER_B_IP met het IP-adres van je frontend-server
+          {distro === "debian" ? (
+            <CodeBlock>{`# Vervang SERVER_B_IP met het IP-adres van je frontend-server
 # Voorbeeld: sudo ufw allow from 192.168.1.20 to any port 8000
 sudo ufw allow from SERVER_B_IP to any port 8000`}</CodeBlock>
+          ) : (
+            <CodeBlock>{`# Vervang SERVER_B_IP met het IP-adres van je frontend-server
+# Voorbeeld: sudo firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address=192.168.1.20 port port=8000 protocol=tcp accept'
+sudo firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address=SERVER_B_IP port port=8000 protocol=tcp accept'
+sudo firewall-cmd --reload`}</CodeBlock>
+          )}
           <Warn>
             <strong>Belangrijk!</strong> Noteer de <strong><InfoTooltip text="Publieke sleutel waarmee de frontend met de Supabase API praat. Dit is geen geheim — hij wordt in de browser gebruikt." /></strong> die het script aan het einde toont — 
             die heb je nodig bij het installeren van Server B. Je vindt deze ook terug in <code className="rounded bg-muted px-1.5 py-0.5 text-xs">/opt/supabase/credentials.txt</code>.
@@ -504,7 +511,7 @@ cd /opt/supabase && docker compose restart auth`}</CodeBlock>
         <div className="space-y-4">
           <TroubleItem q="Container start niet op" a={`Check logs: docker logs supabase-db (of andere containernaam). Vaak een verkeerd wachtwoord of poort-conflict.`} />
           <TroubleItem q="Frontend laadt niet" a="Check of de container draait: docker ps. Test lokaal: curl http://localhost:3000. Check Nginx config: sudo nginx -t" />
-          <TroubleItem q="SSL werkt niet" a="Controleer of poort 80 en 443 open staan in Proxmox firewall én UFW. Draai opnieuw: sudo certbot --nginx -d jouw-domein.nl" />
+          <TroubleItem q="SSL werkt niet" a={distro === "debian" ? "Controleer of poort 80 en 443 open staan in Proxmox firewall én UFW. Draai opnieuw: sudo certbot --nginx -d jouw-domein.nl" : "Controleer of poort 80 en 443 open staan in Proxmox firewall én firewalld (sudo firewall-cmd --list-all). Draai opnieuw: sudo certbot --nginx -d jouw-domein.nl"} />
           <TroubleItem q="Database connectie mislukt" a={`Check of PostgreSQL draait: docker exec supabase-db pg_isready -U supabase.${mode === "split" ? " Bij split: check of poort 8000 open staat op Server A met: curl http://SERVER_A_IP:8000/rest/v1/" : ""}`} />
           <TroubleItem q="Git pull mislukt" a="Check deploy key: ssh -T git@github.com. Controleer ~/.ssh/config. Zorg dat de deploy key op GitHub staat." />
           <TroubleItem q="Supabase API geeft 401" a="Controleer of ANON_KEY in .env.production (frontend) overeenkomt met de key in /opt/supabase/.env (backend). Deze moeten exact gelijk zijn." />
