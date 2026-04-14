@@ -1159,7 +1159,7 @@ main "\$@"`;
   return (
     <Warn>
       <strong>install.sh niet gevonden?</strong> Je repo is waarschijnlijk privé — de standaard <code className="rounded bg-muted px-1 text-xs">curl</code> download werkt dan niet.
-      <div className="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 text-yellow-200 text-xs">
+      <div className="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 <div className="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 text-foreground text-xs">">
         <strong>⚠️ Let op:</strong> Ook als je install.sh handmatig aanmaakt, vraagt het script om je GitHub repo URL en kloont het via SSH. Zorg dat je de <strong>deploy key stap</strong> hierboven eerst hebt uitgevoerd!
       </div>
       <ol className="list-inside list-decimal mt-2 space-y-2">
@@ -1205,7 +1205,7 @@ main "\$@"`;
               <p><strong>Stap 3:</strong> Maak uitvoerbaar en start de installatie:</p>
               <pre className="rounded bg-muted px-2 py-1 text-[11px]"><code>chmod +x /opt/lovable-app/install.sh{"\n"}cd /opt/lovable-app{"\n"}sudo bash install.sh</code></pre>
             </div>
-            <div className="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 text-yellow-200">
+            <div className="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 <div className="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 text-foreground">
               <strong>⚠️ Let op:</strong> Gebruik altijd <code className="rounded bg-muted px-1">sudo bash install.sh</code> — niet <code className="rounded bg-muted px-1">sudo install.sh</code> of <code className="rounded bg-muted px-1">./install.sh</code>. Zonder <code className="rounded bg-muted px-1">bash</code> herkent Linux het commando niet.
             </div>
           </div>
