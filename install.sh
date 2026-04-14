@@ -622,21 +622,50 @@ configure_firewall() {
 # --- Create update script ---
 create_update_script() {
   if [[ "$INSTALL_MODE" == "database" ]]; then
-    # Database-only mode: geen frontend, alleen infra + supabase restart
+    # Database-only mode: infra + app pull (voor migraties) + supabase restart
     cat > /usr/local/bin/lovable-update <<UPDATEEOF
 #!/bin/bash
 set -euo pipefail
 
 INFRA_DIR="$INFRA_DIR"
+APP_DIR="$APP_DIR"
 SUPABASE_DIR="$SUPABASE_DIR"
+MIGRATIONS_DONE_DIR="$SUPABASE_DIR/.migrations_done"
 
 echo "=== Lovable Supabase Updater ==="
 echo ""
 
-echo "[1/2] Infra-repo updaten..."
+echo "[1/4] Infra-repo updaten..."
 cd "\$INFRA_DIR" && git pull
 
-echo "[2/2] Supabase stack herstarten..."
+echo "[2/4] App-repo updaten (voor migraties)..."
+if [[ -d "\$APP_DIR/.git" ]]; then
+  cd "\$APP_DIR" && git pull
+else
+  echo "  ⚠ App-repo niet gevonden in \$APP_DIR — migraties overgeslagen"
+fi
+
+echo "[3/4] Database migraties controleren..."
+mkdir -p "\$MIGRATIONS_DONE_DIR"
+if [[ -d "\$APP_DIR/supabase/migrations" ]]; then
+  for migration in "\$APP_DIR/supabase/migrations/"*.sql; do
+    if [[ -f "\$migration" ]]; then
+      local_name="\$(basename "\$migration")"
+      if [[ ! -f "\$MIGRATIONS_DONE_DIR/\$local_name" ]]; then
+        echo "  Nieuwe migratie: \$local_name"
+        cp "\$migration" "\$SUPABASE_DIR/volumes/db/init/\$local_name"
+        if docker exec -i supabase-db psql -U supabase -d postgres --single-transaction < "\$migration"; then
+          touch "\$MIGRATIONS_DONE_DIR/\$local_name"
+          echo "    ✅ Succesvol"
+        else
+          echo "    ❌ Mislukt — controleer handmatig"
+        fi
+      fi
+    fi
+  done
+fi
+
+echo "[4/4] Supabase stack herstarten..."
 cd "\$SUPABASE_DIR" && docker compose up -d
 
 echo ""
@@ -767,7 +796,9 @@ CREDEOF
 
   echo ""
   echo -e "  📂 Infra:   ${BLUE}$INFRA_DIR${NC}"
-  echo -e "  📂 App:     ${BLUE}$APP_DIR${NC}"
+  if [[ "$INSTALL_MODE" != "database" ]]; then
+    echo -e "  📂 App:     ${BLUE}$APP_DIR${NC}"
+  fi
   echo -e "  🔄 Updates: ${BLUE}lovable-update${NC}"
   echo ""
 }
@@ -785,6 +816,17 @@ main() {
   if [[ "$INSTALL_MODE" != "database" ]]; then
     clone_app
     detect_project_type
+  else
+    # In database mode: clone app-repo optioneel voor migraties
+    echo ""
+    echo -e "${BLUE}Wil je de app-repo clonen voor automatische migraties?${NC}"
+    echo "  Dit is nodig als je app database-migraties heeft."
+    echo "  Het script cloned de app-repo naar $APP_DIR (alleen voor migraties, geen build)."
+    echo ""
+    read -p "App-repo clonen voor migraties? (j/n): " clone_for_migrations
+    if [[ "$clone_for_migrations" == "j" ]]; then
+      clone_app
+    fi
   fi
 
   case "$INSTALL_MODE" in
