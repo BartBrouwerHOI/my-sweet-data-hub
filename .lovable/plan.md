@@ -1,75 +1,56 @@
 
 
-## Plan: Eén-klik VPS Installer — Full-Stack Lovable + Self-Hosted Supabase
+## Plan: Handleiding-pagina met Proxmox/Split-Server Setup
 
-### Wat je krijgt
+### Wat wordt gebouwd
 
-Een enkel `install.sh` script dat je op een verse Ubuntu 24 VPS draait. Het installeert alles automatisch via Docker en haalt je code uit GitHub. Bij updates in Lovable doe je gewoon `git pull` en de app herstart automatisch.
+Twee nieuwe pagina's in de app plus een navigatie-header:
 
-### Hoe het werkt
+**1. Landingspagina (`src/routes/index.tsx`)** — vervangt placeholder
+- Korte uitleg: wat dit project is (self-hosted Lovable + Supabase)
+- Knop naar `/handleiding`
+- Architectuuroverzicht
 
-```text
-Browser → Nginx (SSL/port 443)
-            ├── / → Frontend container (je Lovable React app)
-            └── /api, /auth, /rest, /storage → Supabase containers
-                    ├── PostgreSQL
-                    ├── GoTrue (auth)
-                    ├── PostgREST (API)
-                    ├── Storage
-                    └── Realtime
-```
+**2. Handleiding (`src/routes/handleiding.tsx`)** — stap-voor-stap guide
 
-### Wat het install-script doet
+Secties:
 
-1. Vraagt om: GitHub repo URL, domeinnaam, admin e-mail
-2. Installeert Docker + Docker Compose + Nginx + Certbot
-3. Cloned je GitHub repo
-4. Genereert veilige JWT secrets, anon key, service role key automatisch
-5. Bouwt de frontend als Docker container (Node build → Nginx static)
-6. Start Supabase stack via Docker Compose (PostgreSQL, Auth, API, Storage)
-7. Draait alle SQL migrations uit `supabase/migrations/`
-8. Configureert Nginx als reverse proxy met SSL (Let's Encrypt)
-9. Maakt een `update.sh` script voor snelle updates
+1. **Vereisten** — Ubuntu 24 VM in Proxmox, minimaal 4GB RAM (of 2x 2GB bij split), SSH-toegang, privé GitHub repo
+2. **Architectuur kiezen** — Twee opties uitgelegd:
+   - **Single server**: alles op één VM
+   - **Split setup**: Server A = database (Supabase/PostgreSQL), Server B = frontend (Node.js + Nginx)
+3. **GitHub deploy key instellen** — SSH key aanmaken op de VM, toevoegen als deploy key in je privé repo, zodat `git clone` werkt zonder wachtwoord
+4. **Single-server installatie** — `git clone` → `bash install.sh` → klaar
+5. **Split-server: Database-server** — Alleen PostgreSQL + Supabase containers draaien, firewall openzetten voor poort 5432/8000
+6. **Split-server: Frontend-server** — Frontend container + Nginx, `.env.production` wijst naar de database-server IP
+7. **Na installatie** — Controleren, Studio dashboard, app URL
+8. **Updates draaien** — `git pull` + `lovable-update`, wat er gebeurt
+9. **Data migreren uit Lovable Cloud** — Export/import stappen
+10. **SMTP & OAuth** — E-mail en Google login configureren
+11. **Troubleshooting** — Veelvoorkomende problemen
+12. **Backup** — Database dump commando's
 
-### Update-workflow (na wijzigingen in Lovable)
+**3. Header (`src/components/Header.tsx`)** — simpele navigatie Home / Handleiding
 
-Lovable pusht automatisch naar GitHub. Op je VPS:
+**4. Root layout update (`src/routes/__root.tsx`)** — Header toevoegen
 
-```bash
-./update.sh
-# Dit doet: git pull → rebuild frontend → restart → klaar
-```
+### Aanpassingen aan install-scripts
 
-Of automatisch via een GitHub Actions webhook (optioneel).
+- **`install.sh`** krijgt een keuzemenu: "Volledige installatie" / "Alleen database" / "Alleen frontend"
+- Bij "Alleen frontend" vraagt het script om het IP/domein van de database-server
+- Bij "Alleen database" worden alleen de Supabase Docker containers gestart + firewall-regels
+- GitHub clone via SSH deploy key (instructies in de handleiding)
+- Geen VPS-provider aanbevelingen — gaat ervan uit dat je al een Proxmox VM hebt
 
-### Bestanden die worden aangemaakt
+### Bestanden
 
-| Bestand | Doel |
-|---------|------|
-| `install.sh` | Hoofdinstallatiescript — alles in één |
-| `update.sh` | Update-script na Lovable wijzigingen |
-| `docker-compose.yml` | Volledige stack: frontend + Supabase |
-| `Dockerfile` | Frontend container (build + Nginx) |
-| `nginx/nginx.conf` | Nginx reverse proxy config |
-| `nginx/app.conf` | Site-specifieke Nginx config |
-| `.env.production` | Alle environment variabelen (auto-gegenereerd) |
-| `INSTALL.md` | Volledige handleiding als backup |
-
-### Wat er in de handleiding (INSTALL.md) staat
-
-- Vereisten (Ubuntu 24, minimaal 4GB RAM, domeinnaam)
-- Stap-voor-stap uitleg van wat het script doet
-- Hoe je data exporteert uit Lovable Cloud en importeert
-- Hoe je gebruikers migreert (wachtwoord-reset flow)
-- Hoe je OAuth providers (Google etc.) herconfigureert
-- Troubleshooting sectie
-- Hoe je automatische updates instelt via GitHub webhook
-
-### Belangrijk
-
-- **Supabase client code blijft ongewijzigd** — alleen de URL/keys wijzen naar je eigen server
-- **Alle migraties werken automatisch** — het script draait ze in de juiste volgorde
-- **SSL wordt automatisch ingesteld** via Let's Encrypt
-- **Minimaal 4GB RAM nodig** voor de volledige Supabase stack
-- **Updates zijn simpel** — `git pull` + rebuild, de Supabase database blijft intact
+| Bestand | Actie |
+|---------|-------|
+| `src/routes/index.tsx` | Vervangen — landingspagina |
+| `src/routes/handleiding.tsx` | Nieuw — complete handleiding |
+| `src/components/Header.tsx` | Nieuw — navigatie |
+| `src/routes/__root.tsx` | Aangepast — Header toevoegen |
+| `install.sh` | Aangepast — keuzemenu single/split |
+| `docker-compose.yml` | Aangepast — split-mode support |
+| `INSTALL.md` | Bijgewerkt — verwijst naar de website |
 
