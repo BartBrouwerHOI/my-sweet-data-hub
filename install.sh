@@ -16,6 +16,9 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+DISTRO_FAMILY=""  # "debian" or "rhel"
+DISTRO_ID=""
+
 INSTALL_MODE=""
 GITHUB_REPO=""
 DOMAIN=""
@@ -48,15 +51,36 @@ log_info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
+# --- Detect Linux distro ---
+detect_distro() {
+  if [[ -f /etc/os-release ]]; then
+    DISTRO_ID=$(. /etc/os-release && echo "$ID")
+  else
+    log_error "Kan /etc/os-release niet lezen. Welk besturingssysteem gebruik je?"
+    exit 1
+  fi
+
+  case "$DISTRO_ID" in
+    ubuntu|debian)
+      DISTRO_FAMILY="debian"
+      log_info "Gedetecteerd: $DISTRO_ID (Debian-familie — apt/ufw)"
+      ;;
+    centos|almalinux|rocky|rhel|fedora)
+      DISTRO_FAMILY="rhel"
+      log_info "Gedetecteerd: $DISTRO_ID (RHEL-familie — dnf/firewalld)"
+      ;;
+    *)
+      log_warn "Onbekende distro: $DISTRO_ID. Probeer als Debian-familie..."
+      DISTRO_FAMILY="debian"
+      ;;
+  esac
+}
+
 # --- Pre-flight checks ---
 check_requirements() {
   if [[ $EUID -ne 0 ]]; then
     log_error "Dit script moet als root gedraaid worden. Gebruik: sudo bash install.sh"
     exit 1
-  fi
-
-  if ! grep -qi "ubuntu" /etc/os-release 2>/dev/null; then
-    log_warn "Dit script is ontworpen voor Ubuntu 24. Andere distro's kunnen problemen geven."
   fi
 
   local mem_mb
@@ -115,8 +139,15 @@ gather_input() {
 # --- Install system dependencies ---
 install_dependencies() {
   log_info "Systeem updaten en dependencies installeren..."
-  apt-get update -qq
-  apt-get install -y -qq curl git nginx certbot python3-certbot-nginx ufw jq openssl
+
+  if [[ "$DISTRO_FAMILY" == "debian" ]]; then
+    apt-get update -qq
+    apt-get install -y -qq curl git nginx certbot python3-certbot-nginx ufw jq openssl
+  elif [[ "$DISTRO_FAMILY" == "rhel" ]]; then
+    dnf install -y -q epel-release
+    dnf install -y -q curl git nginx certbot certbot-nginx firewalld jq openssl
+    systemctl enable --now firewalld
+  fi
 
   if ! command -v docker &>/dev/null; then
     log_info "Docker installeren..."
@@ -129,7 +160,11 @@ install_dependencies() {
 
   if ! docker compose version &>/dev/null; then
     log_info "Docker Compose plugin installeren..."
-    apt-get install -y -qq docker-compose-plugin
+    if [[ "$DISTRO_FAMILY" == "debian" ]]; then
+      apt-get install -y -qq docker-compose-plugin
+    elif [[ "$DISTRO_FAMILY" == "rhel" ]]; then
+      dnf install -y -q docker-compose-plugin
+    fi
   fi
 }
 
