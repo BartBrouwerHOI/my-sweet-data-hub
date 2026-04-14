@@ -1,48 +1,42 @@
 
 
-## Plan: Invulvelden bovenaan de handleiding voor automatische commando's
+## Plan: Fix git clone commando's — SSH key probleem oplossen
 
-### Idee
+### Probleem (zichtbaar in screenshot)
 
-Bovenaan de handleiding komen invulvelden waar je je eigen gegevens invult. Alle commando's en links in de hele handleiding worden automatisch bijgewerkt met jouw waarden, zodat je ze direct kunt kopiëren en plakken zonder iets te vervangen.
+Alle drie de methoden falen:
+- `sudo -u $USER git clone ... /opt/lovable-app` → Permission denied (kan niet schrijven naar `/opt/`)
+- `git clone ... /tmp/lovable-app && sudo mv` → Repository not found (SSH key config issue)
+- `sudo git clone` → Permission denied (publickey) — root heeft geen SSH key
 
-### Invulvelden
+### Oplossing
 
-| Veld | Placeholder | Voorbeeld |
-|------|------------|-----------|
-| GitHub gebruikersnaam | `JOUW-USER` | `jandevries` |
-| Repository naam | `JOUW-REPO` | `mijn-app` |
-| Server IP | `JOUW-SERVER-IP` | `192.168.1.100` |
-| Domeinnaam | `jouw-domein.nl` | `mijnapp.nl` |
-| Server A IP (split mode) | `SERVER_A_IP` | `192.168.1.101` |
+Twee stappen: eerst directory aanmaken met `sudo`, dan clonen als gewone gebruiker:
 
-### Hoe het werkt
+```bash
+# Maak de map aan en geef jezelf rechten
+sudo mkdir -p /opt/lovable-app
+sudo chown $USER:$USER /opt/lovable-app
 
-1. **State toevoegen** — `useState` voor elk veld, standaard leeg
-2. **Invulformulier** — compact formulier boven de inhoudsopgave met labels en input-velden. Waarden worden opgeslagen in `localStorage` zodat ze bewaard blijven bij pagina-refresh
-3. **Template functie** — een `fill(text)` helper die alle placeholders vervangt door de ingevulde waarden. Als een veld leeg is, blijft de placeholder staan (bijv. `JOUW-USER`)
-4. **CodeBlock updaten** — `CodeBlock` en `CopyCode` renderen de `fill()`-versie van hun content. De kopieerknop kopieert ook de ingevulde versie
-5. **~60 plekken** in de handleiding waar placeholders voorkomen worden automatisch bijgewerkt (geen handmatige vervangingen nodig — het gaat via de `fill()` functie)
+# Clone als huidige gebruiker (die de SSH key heeft)
+git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
 
-### Visueel
-
-```text
-┌─────────────────────────────────────────┐
-│ 🔧 Jouw gegevens                        │
-│                                         │
-│ GitHub user:  [jandevries    ]           │
-│ Repo naam:    [mijn-app      ]           │
-│ Server IP:    [192.168.1.100 ]           │
-│ Domein:       [mijnapp.nl    ]           │
-│                                         │
-│ 💡 Vul je gegevens in — alle commando's │
-│    worden automatisch aangepast.         │
-└─────────────────────────────────────────┘
+# Start de installer
+cd /opt/lovable-app
+sudo bash install.sh
 ```
+
+### Wijzigingen in `src/routes/handleiding.tsx`
+
+1. **Single mode** (regel 333-339): Vervang `sudo git clone` door de `mkdir + chown + git clone` aanpak
+2. **Split mode Server A** (regel 363-364): Zelfde fix
+3. **Split mode Server B** (regel 398-399): Zelfde fix
+4. **Verwijder** het voorbeeld-commentaar (`# Voorbeeld: sudo git clone...`) — de invulvelden maken dit overbodig
+5. **Voeg een Warn toe** die uitlegt: "Gebruik NIET `sudo git clone` — sudo draait als root en heeft geen toegang tot jouw SSH key"
 
 ### Bestand
 
 | Bestand | Actie |
 |---------|-------|
-| `src/routes/handleiding.tsx` | State + localStorage + invulformulier + `fill()` helper + doorvoeren in CodeBlock/CopyCode |
+| `src/routes/handleiding.tsx` | Clone-commando's aanpassen op 3 plekken + waarschuwing toevoegen |
 
