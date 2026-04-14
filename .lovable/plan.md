@@ -1,77 +1,67 @@
 
 
-## Analyse: gevonden problemen
+## Analyse: wat goed is en wat beter kan
 
-### Kritieke fouten
+### Wat al goed werkt
+- install.sh is solide: distro-detectie, mode-selectie, deploy key validatie, error handling
+- Database-only update script is correct (alleen infra pull + docker compose)
+- Migratie-tracking via `.migrations_done/` werkt
+- Troubleshooting sectie is uitgebreid en praktisch
 
-**1. Fake infra-repo URL overal hardcoded**
-`https://github.com/lovable-vps/lovable-infra.git` bestaat niet. Dit staat in de handleiding, INSTALL.md, en codeblokken. De gebruiker moet de echte URL van dit project invullen, of het moet configureerbaar zijn.
+### Problemen gevonden
 
-**2. Split mode Server A: migraties onmogelijk**
-De handleiding (regel 543-550) zegt op Server A: `cd /opt/lovable-app && git pull` — maar in database mode wordt `clone_app` overgeslagen. Die map bestaat niet op Server A.
+**1. `JOUW_ANON_KEY` placeholder niet automatisch ingevuld**
+In de na-installatie stap (regel 494, 510, 519) staat `JOUW_ANON_KEY` als hardcoded tekst. Dit wordt NIET vervangen door de `fill()` functie — die kent alleen `INFRA-REPO-URL`, `APP-USER`, `APP-REPO`, `JOUW-SERVER-IP`, `jouw-domein.nl`, en `SERVER_A_IP`. De beheerder moet dit handmatig opzoeken. 
 
-**3. Database mode: kapot update-script**
-`create_update_script()` gebruikt `$PROJECT_TYPE` en `$APP_DIR`, maar in database mode zijn die leeg. Het gegenereerde `lovable-update` commando zou falen.
+**Oplossing:** Verwijder de losse `curl` test met `JOUW_ANON_KEY` en verwijs alleen naar `credentials.txt`. Of splits het blok zodat de test apart staat met duidelijke instructie "vervang dit handmatig".
 
-**4. `sudo chown $USER:$USER` is zinloos als root**
-De handleiding begint met `ssh root@...`. Als je als root inlogt is `$USER=root` en doet chown niets. Bovendien draait `install.sh` al als root, dus de mkdir+chown stap is overbodig — het script doet dit zelf.
+**2. Split mode migraties: onpraktisch scp-commando**
+Regel 551-563: De migratie-instructie voor split mode is verwarrend — drie opties door elkaar (scp via eigen computer, scp direct, clone op Server A). Dit is te veel keuze.
 
-### Logica/volgorde problemen
+**Oplossing:** Eén simpele aanpak: clone de app-repo op Server A (eenmalig), daarna `git pull` + migraties draaien. De scp-variant verwijderen.
 
-**5. Handleiding clone-stappen te veel ruis**
-De drie regels `mkdir -p`, `chown`, `git clone` kunnen één regel zijn: `git clone ... /opt/lovable-infra`. Git maakt de map zelf aan. Als root heb je geen chown nodig.
+**3. `gather_input()` vraagt GEEN repo URL in full mode**
+In `gather_input()` (regel 129-146) wordt de GitHub repo URL alleen gevraagd in `clone_app()`. Maar de volgorde `gather_input()` → later `clone_app()` maakt dat de beheerder eerst alle andere vragen beantwoordt en dan pas de repo URL. Dit is logisch maar de handleiding (stap Installatie, regel 408-415) zet de repo URL als laatste bullet — dat klopt.
 
-**6. Split mode mist een duidelijke "checklist" tussenstap**
-Na Server A installatie moet je gegevens noteren (Anon Key, Server A IP). De handleiding vermeldt dit, maar het zit verstopt in een waarschuwingsblok. Een expliciete "noteer deze gegevens" checklist is duidelijker.
+**4. `print_summary()` toont `APP_DIR` ook in database mode**
+Regel 770: `📂 App: /opt/lovable-app` wordt altijd getoond, ook in database mode waar er geen app-dir is.
 
-**7. Migraties zijn niet idempotent**
-Het update-script draait ALLE migraties opnieuw bij elke update. Supabase migraties bevatten vaak `CREATE TABLE` die falen bij tweede run. De `|| true` onderdrukt de fout, maar dat verbergt ook echte fouten.
+**5. Na-installatie codeblok combineert checks + tests in één kopieerbaar blok**
+Het blok op regel 484-494 bevat zowel `docker ps` als de API-test met placeholder. Als een beheerder het hele blok kopieert en plakt, faalt het op de `JOUW_ANON_KEY` regel.
 
-### Kleine verbeteringen
+**Oplossing:** Splits in twee blokken: (1) basis-checks (docker ps, curl frontend), (2) API-test apart met instructie "vervang de key handmatig".
 
-**8. Handleiding verwijst naar `JOUW_ANON_KEY` in na-installatie stap** — maar die key staat in `/opt/supabase/credentials.txt`. Zou helpen om dat expliciet te zeggen.
+**6. Volgorde handleiding stappen is goed maar deploy key stap mist sudo-waarschuwing vroeg genoeg**
+De handleiding begint met `ssh root@...` (als root inloggen), maar de deploy key wordt aangemaakt als root. Dat werkt, maar de troubleshooting over "sudo ssh werkt niet" (regel 676) is dan irrelevant. Kleine inconsistentie.
 
-**9. De infra-repo URL moet in het configuratieformulier** — of je hardcode de echte URL van dit project.
+**7. `infraUrl` veld heeft geen voorbeeld-formaat**
+De placeholder is `INFRA-REPO-URL` maar een beheerder weet niet of dit `https://github.com/user/repo.git` of `https://github.com/user/repo` moet zijn.
+
+**Oplossing:** Placeholder aanpassen naar `https://github.com/user/repo.git`.
 
 ---
 
 ## Plan: fixes
 
-### A. Infra-repo URL oplossen
-Twee opties:
-- **Optie 1**: Voeg `infraUrl` veld toe aan het configuratieformulier (simpelste)
-- **Optie 2**: Hardcode de echte GitHub URL van dit project
+### A. Na-installatie codeblok splitsen
+- Blok 1: `docker ps` + `curl localhost:3000` + `cat credentials.txt | grep "Anon Key"`
+- Blok 2 (apart): "Test de API" met uitleg dat je de key uit blok 1 moet invullen
+- Verwijder `JOUW_ANON_KEY` uit kopieerbare blokken
 
-Ik ga voor **optie 1** — een extra veld "Infra-repo URL" met placeholder `https://github.com/USER/REPO.git`. De handleiding-codeblokken gebruiken dan `fill()` om de URL in te vullen.
+### B. Split mode migraties vereenvoudigen
+- Verwijder het scp-commando
+- Eén aanpak: "Clone de app-repo op Server A (eenmalig), daarna `git pull && lovable-update`"
+- Voeg toe: `install.sh` in database mode zou ook de app-repo moeten clonen (alleen voor migraties)
 
-### B. Database mode fix in install.sh
-- `create_update_script`: als `INSTALL_MODE=database`, genereer een update-script dat alleen `git pull` in infra doet + `docker compose restart` — geen frontend rebuild.
-- Of: sla `create_update_script` over in database mode.
+### C. `print_summary()` fix
+- Verberg `APP_DIR` regel als `INSTALL_MODE=database`
 
-### C. Split mode migraties fix in handleiding
-- Server A: voeg instructie toe om de app-repo te clonen (alleen voor migraties), of geef een alternatief commando dat de SQL direct van Server B kopieert via scp.
+### D. `infraUrl` placeholder verbeteren
+- Verander placeholder van `INFRA-REPO-URL` naar `https://github.com/user/repo.git`
 
-### D. Vereenvoudig clone-instructies
-Van:
-```bash
-sudo mkdir -p /opt/lovable-infra
-sudo chown $USER:$USER /opt/lovable-infra
-git clone https://... /opt/lovable-infra
-```
-Naar:
-```bash
-git clone https://... /opt/lovable-infra
-```
-
-### E. Na-installatie: verwijs naar credentials.txt
-Vervang `JOUW_ANON_KEY` placeholder door:
-```bash
-# Je Anon Key vind je in:
-cat /opt/supabase/credentials.txt | grep "Anon Key"
-```
-
-### F. Migraties idempotent maken
-Voeg `--single-transaction` toe en track welke migraties al gedraaid zijn via een simpele marker-file, of gebruik `IF NOT EXISTS` hint in de documentatie.
+### E. install.sh database mode: ook app clonen (voor migraties)
+- In database mode: vraag optioneel om de app-repo URL, clone naar `/opt/lovable-app` zodat migraties lokaal beschikbaar zijn
+- Pas `create_update_script` aan: in database mode ook `git pull` in app-dir + migraties draaien
 
 ---
 
@@ -79,8 +69,6 @@ Voeg `--single-transaction` toe en track welke migraties al gedraaid zijn via ee
 
 | Bestand | Wijziging |
 |---|---|
-| `src/routes/handleiding.tsx` | InfraUrl veld toevoegen, clone-stappen vereenvoudigen, na-installatie credentials.txt referentie, split Server A migratie-fix |
-| `install.sh` | Database mode: skip of pas create_update_script aan |
-| `update.sh` | Migraties: track al-gedraaide migraties |
-| `INSTALL.md` | Clone-stappen vereenvoudigen, placeholder URL aanpassen |
+| `src/routes/handleiding.tsx` | Na-installatie blok splitsen, JOUW_ANON_KEY verwijderen uit kopieerblokken, split migratie vereenvoudigen, infraUrl placeholder verbeteren |
+| `install.sh` | `print_summary`: verberg APP_DIR in database mode. Database mode: optioneel app-repo clonen voor migraties. Update script in database mode: migraties toevoegen |
 
