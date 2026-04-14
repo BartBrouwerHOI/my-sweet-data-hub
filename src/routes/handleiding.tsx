@@ -978,7 +978,9 @@ clone_app() {
   else
     read -p "GitHub repo URL (SSH): " GITHUB_REPO
     log_info "SSH-verbinding met GitHub testen..."
-    if ! ssh -T -o ConnectTimeout=10 git@github.com 2>&1 | grep -q "successfully authenticated"; then
+    local ssh_output
+    ssh_output=\$(ssh -T -o ConnectTimeout=10 git@github.com 2>&1 || true)
+    if ! echo "\$ssh_output" | grep -q "successfully authenticated"; then
       log_error "SSH-verbinding met GitHub mislukt!"
       echo ""
       echo "  Mogelijke oorzaken:"
