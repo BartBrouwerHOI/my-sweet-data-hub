@@ -789,7 +789,6 @@ configure_firewall() {
 # --- Create update script ---
 create_update_script() {
   if [[ "$INSTALL_MODE" == "database" ]]; then
-    # Database-only mode: infra + app pull (voor migraties) + supabase restart
     cat > /usr/local/bin/lovable-update <<UPDATEEOF
 #!/bin/bash
 set -euo pipefail
@@ -820,12 +819,15 @@ if [[ -d "\$APP_DIR/supabase/migrations" ]]; then
       local_name="\$(basename "\$migration")"
       if [[ ! -f "\$MIGRATIONS_DONE_DIR/\$local_name" ]]; then
         echo "  Nieuwe migratie: \$local_name"
-        cp "\$migration" "\$SUPABASE_DIR/volumes/db/init/\$local_name"
-        if docker exec -i supabase-db psql -U supabase -d postgres --single-transaction < "\$migration"; then
+        if docker exec -i supabase-db bash -c \\
+          'PGPASSWORD=\$POSTGRES_PASSWORD psql -U supabase -d postgres -h localhost -v ON_ERROR_STOP=1 -X --single-transaction' \\
+          < "\$migration"; then
           touch "\$MIGRATIONS_DONE_DIR/\$local_name"
           echo "    ✅ Succesvol"
         else
-          echo "    ❌ Mislukt — controleer handmatig"
+          echo "    ❌ Mislukt — stoppen bij eerste fout"
+          echo "    Los het probleem op en draai daarna opnieuw: lovable-update"
+          exit 1
         fi
       fi
     fi
@@ -839,7 +841,6 @@ echo ""
 echo "✅ Update compleet!"
 UPDATEEOF
   elif [[ "$INSTALL_MODE" == "frontend" ]]; then
-    # Frontend-only mode: geen migraties, geen database
     cat > /usr/local/bin/lovable-update <<UPDATEEOF
 #!/bin/bash
 set -euo pipefail
@@ -851,11 +852,9 @@ PROJECT_TYPE="$PROJECT_TYPE"
 echo "=== Lovable Frontend Updater ==="
 echo ""
 
-# 1. Update infra-repo
 echo "[1/3] Infra-repo updaten..."
 cd "\$INFRA_DIR" && git pull
 
-# 2. Update app-repo + rebuild
 echo "[2/3] App-code ophalen en bouwen (type: \$PROJECT_TYPE)..."
 cd "\$APP_DIR" && git pull
 if [[ "\$PROJECT_TYPE" == "spa" ]]; then
@@ -865,7 +864,6 @@ else
   docker build -t lovable-frontend -f "\$INFRA_DIR/Dockerfile.ssr" "\$APP_DIR"
 fi
 
-# 3. Restart frontend container
 echo "[3/3] Frontend herstarten..."
 docker stop lovable-frontend 2>/dev/null || true
 docker rm lovable-frontend 2>/dev/null || true
@@ -879,7 +877,6 @@ echo ""
 echo "✅ Update compleet!"
 UPDATEEOF
   else
-    # Full mode: frontend + database + migraties
     cat > /usr/local/bin/lovable-update <<UPDATEEOF
 #!/bin/bash
 set -euo pipefail
@@ -893,15 +890,12 @@ MIGRATIONS_DONE_DIR="$SUPABASE_DIR/.migrations_done"
 echo "=== Lovable App Updater ==="
 echo ""
 
-# 1. Update infra-repo
 echo "[1/5] Infra-repo updaten..."
 cd "\$INFRA_DIR" && git pull
 
-# 2. Update app-repo
 echo "[2/5] App-code ophalen van GitHub..."
 cd "\$APP_DIR" && git pull
 
-# 3. Rebuild frontend met Dockerfile uit infra-repo
 echo "[3/5] Frontend opnieuw bouwen (type: \$PROJECT_TYPE)..."
 if [[ "\$PROJECT_TYPE" == "spa" ]]; then
   cp "\$INFRA_DIR/nginx/frontend-spa.conf" "\$APP_DIR/nginx.conf"
@@ -910,7 +904,6 @@ else
   docker build -t lovable-frontend -f "\$INFRA_DIR/Dockerfile.ssr" "\$APP_DIR"
 fi
 
-# 4. Restart frontend container
 echo "[4/5] Frontend herstarten..."
 docker stop lovable-frontend 2>/dev/null || true
 docker rm lovable-frontend 2>/dev/null || true
@@ -920,7 +913,6 @@ docker run -d \\
   -p 3000:3000 \\
   lovable-frontend
 
-# 5. Database migraties (alleen nieuwe)
 echo "[5/5] Database migraties controleren..."
 mkdir -p "\$MIGRATIONS_DONE_DIR"
 if [[ -d "\$APP_DIR/supabase/migrations" ]]; then
@@ -929,12 +921,15 @@ if [[ -d "\$APP_DIR/supabase/migrations" ]]; then
       local_name="\$(basename "\$migration")"
       if [[ ! -f "\$MIGRATIONS_DONE_DIR/\$local_name" ]]; then
         echo "  Nieuwe migratie: \$local_name"
-        cp "\$migration" "\$SUPABASE_DIR/volumes/db/init/\$local_name"
-        if docker exec -i supabase-db psql -U supabase -d postgres --single-transaction < "\$migration"; then
+        if docker exec -i supabase-db bash -c \\
+          'PGPASSWORD=\$POSTGRES_PASSWORD psql -U supabase -d postgres -h localhost -v ON_ERROR_STOP=1 -X --single-transaction' \\
+          < "\$migration"; then
           touch "\$MIGRATIONS_DONE_DIR/\$local_name"
           echo "    ✅ Succesvol"
         else
-          echo "    ❌ Mislukt — controleer handmatig"
+          echo "    ❌ Mislukt — stoppen bij eerste fout"
+          echo "    Los het probleem op en draai daarna opnieuw: lovable-update"
+          exit 1
         fi
       fi
     fi
