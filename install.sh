@@ -193,12 +193,21 @@ generate_jwt() {
 clone_app() {
   log_info "App clonen van GitHub..."
 
+  # --- Checksum van het NU draaiende script opslaan vóór clone ---
+  local current_checksum=""
+  if [[ -f "$0" ]]; then
+    current_checksum=$(sha256sum "$0" 2>/dev/null | cut -d' ' -f1 || true)
+  fi
+
   # --- Bestaande map afhandelen ---
   if [[ -d "$APP_DIR" ]]; then
-    if [[ -d "$APP_DIR/.git" && -f "$APP_DIR/docker-compose.yml" ]]; then
+    if [[ -d "$APP_DIR/.git" ]]; then
       # Geldige repo: gewoon updaten
       log_info "App directory bestaat al met geldige repo, git pull uitvoeren..."
       cd "$APP_DIR" && git pull
+
+      # Self-update check na pull
+      _self_update_check "$current_checksum"
       return
     else
       # Map bestaat maar is geen geldige repo (eerdere mislukte poging)
@@ -284,14 +293,35 @@ clone_app() {
 
   git clone "$GITHUB_REPO" "$APP_DIR"
 
-  # --- Self-update: als de repo een nieuwere install.sh bevat, herstart daarmee ---
-  if [[ -f "$APP_DIR/install.sh" ]]; then
-    if ! cmp -s "$0" "$APP_DIR/install.sh"; then
-      log_info "Nieuwere versie van install.sh gevonden in repo, herstart met bijgewerkte installer..."
-      cp "$APP_DIR/install.sh" /usr/local/bin/lovable-install
-      chmod +x /usr/local/bin/lovable-install
-      exec bash "$APP_DIR/install.sh" "$@"
-    fi
+  # Self-update check na clone
+  _self_update_check "$current_checksum"
+}
+
+# --- Self-update helper: vergelijk checksum van draaiend script met repo-versie ---
+_self_update_check() {
+  local old_checksum="$1"
+
+  if [[ -z "$old_checksum" ]]; then
+    log_info "Geen checksum van oorspronkelijk script — self-update overgeslagen."
+    return
+  fi
+
+  if [[ ! -f "$APP_DIR/install.sh" ]]; then
+    log_warn "Geen install.sh in repo gevonden — self-update niet mogelijk."
+    return
+  fi
+
+  local new_checksum
+  new_checksum=$(sha256sum "$APP_DIR/install.sh" 2>/dev/null | cut -d' ' -f1 || true)
+
+  if [[ "$old_checksum" != "$new_checksum" ]]; then
+    log_info "Nieuwere install.sh gevonden in repo (checksum verschilt)."
+    log_info "Herstart met bijgewerkte installer..."
+    cp "$APP_DIR/install.sh" /usr/local/bin/lovable-install
+    chmod +x /usr/local/bin/lovable-install
+    exec bash "$APP_DIR/install.sh" "$@"
+  else
+    log_info "install.sh is al up-to-date."
   fi
 }
 
