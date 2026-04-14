@@ -1,67 +1,53 @@
 
 
-## Analyse: wat goed is en wat beter kan
+## Analyse: huidige staat
 
-### Wat al goed werkt
-- install.sh is solide: distro-detectie, mode-selectie, deploy key validatie, error handling
-- Database-only update script is correct (alleen infra pull + docker compose)
-- Migratie-tracking via `.migrations_done/` werkt
-- Troubleshooting sectie is uitgebreid en praktisch
+Na het doorlopen van alle bestanden is de werkwijze nu grotendeels logisch en goed kopieerbaar. Er zijn nog **7 concrete problemen** die de beheerderservaring verstoren:
 
-### Problemen gevonden
+### Gevonden problemen
 
-**1. `JOUW_ANON_KEY` placeholder niet automatisch ingevuld**
-In de na-installatie stap (regel 494, 510, 519) staat `JOUW_ANON_KEY` als hardcoded tekst. Dit wordt NIET vervangen door de `fill()` functie — die kent alleen `INFRA-REPO-URL`, `APP-USER`, `APP-REPO`, `JOUW-SERVER-IP`, `jouw-domein.nl`, en `SERVER_A_IP`. De beheerder moet dit handmatig opzoeken. 
+**1. Volgorde vragen install.sh is onlogisch voor database mode**
+In database mode vraagt het script eerst `gather_input()` (domein, email, wachtwoorden), daarna pas "Wil je de app-repo clonen?" (regel 820-829), en pas DAN `clone_app()` die om de GitHub URL vraagt. De beheerder krijgt de vragen in een vreemde volgorde: wachtwoord → clone ja/nee → repo URL. Beter: alle vragen eerst, dan alle acties.
 
-**Oplossing:** Verwijder de losse `curl` test met `JOUW_ANON_KEY` en verwijs alleen naar `credentials.txt`. Of splits het blok zodat de test apart staat met duidelijke instructie "vervang dit handmatig".
+**2. Database mode: `setup_supabase()` gebruikt `$APP_DIR/supabase/migrations` (regel 369)**
+Als de beheerder "nee" zegt bij "clone voor migraties?", bestaat `$APP_DIR` niet. `setup_supabase()` doet `cp "$APP_DIR/supabase/migrations/"*.sql` — dit faalt niet (door `|| true`), maar het is rommelig. Geen fout, maar onnodig verwarrend in de logs.
 
-**2. Split mode migraties: onpraktisch scp-commando**
-Regel 551-563: De migratie-instructie voor split mode is verwarrend — drie opties door elkaar (scp via eigen computer, scp direct, clone op Server A). Dit is te veel keuze.
+**3. Frontend mode: `create_update_script()` genereert update-script met migratie-logica (stap 5/5)**
+In frontend mode is er geen database — toch bevat het gegenereerde `lovable-update` script migratie-stappen die naar `/opt/supabase` verwijzen. Die map bestaat niet op een frontend-only server. Het werkt (dankzij `-d` checks) maar is verwarrend output.
 
-**Oplossing:** Eén simpele aanpak: clone de app-repo op Server A (eenmalig), daarna `git pull` + migraties draaien. De scp-variant verwijderen.
+**4. `print_summary()` toont `Project Type:` ook in database mode (regel 758)**
+In database mode is `$PROJECT_TYPE` leeg — de output toont `Type: ` met een lege waarde. Ziet er kapot uit.
 
-**3. `gather_input()` vraagt GEEN repo URL in full mode**
-In `gather_input()` (regel 129-146) wordt de GitHub repo URL alleen gevraagd in `clone_app()`. Maar de volgorde `gather_input()` → later `clone_app()` maakt dat de beheerder eerst alle andere vragen beantwoordt en dan pas de repo URL. Dit is logisch maar de handleiding (stap Installatie, regel 408-415) zet de repo URL als laatste bullet — dat klopt.
+**5. Handleiding split mode: Server A "deploy key" is onnodig als je "nee" zegt bij migraties**
+De handleiding zegt "herhaal deze stap op beide servers" voor de deploy key. Maar als de beheerder op Server A "nee" zegt bij "app-repo clonen voor migraties?", dan is er geen deploy key nodig op Server A. De handleiding zou dit conditioneel moeten vermelden.
 
-**4. `print_summary()` toont `APP_DIR` ook in database mode**
-Regel 770: `📂 App: /opt/lovable-app` wordt altijd getoond, ook in database mode waar er geen app-dir is.
+**6. `credentials.txt` bevat `App Dir: /opt/lovable-app` ook in database mode zonder clone**
+Als de beheerder geen app-repo cloned, staat er toch `App Dir: /opt/lovable-app` in credentials.txt — misleidend.
 
-**5. Na-installatie codeblok combineert checks + tests in één kopieerbaar blok**
-Het blok op regel 484-494 bevat zowel `docker ps` als de API-test met placeholder. Als een beheerder het hele blok kopieert en plakt, faalt het op de `JOUW_ANON_KEY` regel.
-
-**Oplossing:** Splits in twee blokken: (1) basis-checks (docker ps, curl frontend), (2) API-test apart met instructie "vervang de key handmatig".
-
-**6. Volgorde handleiding stappen is goed maar deploy key stap mist sudo-waarschuwing vroeg genoeg**
-De handleiding begint met `ssh root@...` (als root inloggen), maar de deploy key wordt aangemaakt als root. Dat werkt, maar de troubleshooting over "sudo ssh werkt niet" (regel 676) is dan irrelevant. Kleine inconsistentie.
-
-**7. `infraUrl` veld heeft geen voorbeeld-formaat**
-De placeholder is `INFRA-REPO-URL` maar een beheerder weet niet of dit `https://github.com/user/repo.git` of `https://github.com/user/repo` moet zijn.
-
-**Oplossing:** Placeholder aanpassen naar `https://github.com/user/repo.git`.
+**7. Handleiding: "Na installatie" sectie heeft geen instructie voor wanneer iets NIET werkt**
+De checks (`docker ps`, `curl`) worden getoond, maar er staat niet wat je moet doen als `docker ps` 0 containers toont of `curl` faalt. Een simpele "Werkt het niet? Zie Troubleshooting" link zou helpen.
 
 ---
 
 ## Plan: fixes
 
-### A. Na-installatie codeblok splitsen
-- Blok 1: `docker ps` + `curl localhost:3000` + `cat credentials.txt | grep "Anon Key"`
-- Blok 2 (apart): "Test de API" met uitleg dat je de key uit blok 1 moet invullen
-- Verwijder `JOUW_ANON_KEY` uit kopieerbare blokken
+### A. install.sh: volgorde verbeteren
+- Verplaats de "wil je app-repo clonen?" vraag naar `gather_input()`, zodat alle vragen bij elkaar staan
+- Sla het resultaat op in een variabele `CLONE_FOR_MIGRATIONS`
+- De daadwerkelijke clone gebeurt later op dezelfde plek (regel 816+)
 
-### B. Split mode migraties vereenvoudigen
-- Verwijder het scp-commando
-- Eén aanpak: "Clone de app-repo op Server A (eenmalig), daarna `git pull && lovable-update`"
-- Voeg toe: `install.sh` in database mode zou ook de app-repo moeten clonen (alleen voor migraties)
+### B. install.sh: `print_summary()` fix voor database mode
+- Verberg de `Type:` regel als `$PROJECT_TYPE` leeg is
+- Verberg `App Dir:` in `credentials.txt` als er geen app-dir is
 
-### C. `print_summary()` fix
-- Verberg `APP_DIR` regel als `INSTALL_MODE=database`
+### C. install.sh: frontend mode update-script zonder migraties
+- Splits `create_update_script()` in drie varianten: full (5 stappen), database (4 stappen), frontend (3 stappen — geen migraties)
 
-### D. `infraUrl` placeholder verbeteren
-- Verander placeholder van `INFRA-REPO-URL` naar `https://github.com/user/repo.git`
+### D. Handleiding: deploy key conditioneel voor split mode
+- Bij split mode: vermeld dat Server A alleen een deploy key nodig heeft als je migraties wilt draaien
 
-### E. install.sh database mode: ook app clonen (voor migraties)
-- In database mode: vraag optioneel om de app-repo URL, clone naar `/opt/lovable-app` zodat migraties lokaal beschikbaar zijn
-- Pas `create_update_script` aan: in database mode ook `git pull` in app-dir + migraties draaien
+### E. Handleiding: "Werkt het niet?" link na de checks
+- Voeg onder elk na-installatie blok een korte zin toe: "Werkt iets niet? Zie stap X (Troubleshooting)."
 
 ---
 
@@ -69,6 +55,6 @@ De placeholder is `INFRA-REPO-URL` maar een beheerder weet niet of dit `https://
 
 | Bestand | Wijziging |
 |---|---|
-| `src/routes/handleiding.tsx` | Na-installatie blok splitsen, JOUW_ANON_KEY verwijderen uit kopieerblokken, split migratie vereenvoudigen, infraUrl placeholder verbeteren |
-| `install.sh` | `print_summary`: verberg APP_DIR in database mode. Database mode: optioneel app-repo clonen voor migraties. Update script in database mode: migraties toevoegen |
+| `install.sh` | Volgorde vragen verbeteren, print_summary leeg type fixen, frontend update-script zonder migraties, credentials.txt conditioneel |
+| `src/routes/handleiding.tsx` | Deploy key conditioneel bij split, "werkt het niet?" link bij na-installatie |
 
