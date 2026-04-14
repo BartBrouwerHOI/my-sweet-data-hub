@@ -652,6 +652,17 @@ function Warn({ children }: { children: React.ReactNode }) {
   );
 }
 
+function StepBadge({ type }: { type: "verplicht" | "aanbevolen" | "optioneel" | "wanneer-nodig" }) {
+  const config = {
+    verplicht: { label: "Verplicht", className: "bg-primary text-primary-foreground" },
+    aanbevolen: { label: "Aanbevolen", className: "bg-destructive text-destructive-foreground" },
+    optioneel: { label: "Optioneel", className: "bg-muted text-muted-foreground" },
+    "wanneer-nodig": { label: "Wanneer nodig", className: "bg-accent text-accent-foreground border border-border" },
+  };
+  const { label, className } = config[type];
+  return <span className={`ml-2 rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${className}`}>{label}</span>;
+}
+
 function TroubleItem({ q, a }: { q: string; a: string }) {
   return (
     <div className="rounded-lg border border-border bg-muted/30 p-4">
