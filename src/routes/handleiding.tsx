@@ -407,7 +407,7 @@ ssh -T -i ~/.ssh/deploy_key git@github.com`}</CodeBlock>
 
           <p><strong>Stap 1:</strong> Clone de <strong>infra-repo</strong> (publiek, geen key nodig):</p>
           <CodeBlock fill={fill}>{`# Clone de infra-repo via HTTPS (geen deploy key nodig)
-git clone INFRA-REPO-URL /opt/lovable-infra`}</CodeBlock>
+sudo git clone INFRA-REPO-URL /opt/lovable-infra`}</CodeBlock>
 
           <p><strong>Stap 2:</strong> Start de installer:</p>
           <CodeBlock fill={fill}>{`sudo bash /opt/lovable-infra/install.sh`}</CodeBlock>
@@ -438,7 +438,7 @@ git clone INFRA-REPO-URL /opt/lovable-infra`}</CodeBlock>
           <Location icon="terminal" text="Terminal op Server A" />
           <p>Op Server A draai je de volledige Supabase stack (database, login, API, opslag):</p>
           <CodeBlock fill={fill}>{`# Clone de infra-repo via HTTPS (geen deploy key nodig)
-git clone INFRA-REPO-URL /opt/lovable-infra
+sudo git clone INFRA-REPO-URL /opt/lovable-infra
 
 # Start de installer
 sudo bash /opt/lovable-infra/install.sh`}</CodeBlock>
@@ -477,7 +477,7 @@ sudo firewall-cmd --reload`}</CodeBlock>
           <Location icon="terminal" text="Terminal op Server B" />
           <p>Op Server B draait alleen de React app — geen database, geen Supabase services:</p>
           <CodeBlock fill={fill}>{`# Clone de infra-repo via HTTPS (geen deploy key nodig)
-git clone INFRA-REPO-URL /opt/lovable-infra
+sudo git clone INFRA-REPO-URL /opt/lovable-infra
 
 # Start de installer
 sudo bash /opt/lovable-infra/install.sh`}</CodeBlock>
@@ -499,13 +499,13 @@ sudo bash /opt/lovable-infra/install.sh`}</CodeBlock>
           <>
             <Location icon="terminal" text="Terminal op je VM" />
             <CodeBlock fill={fill}>{`# Bekijk alle draaiende containers (je zou 8+ containers moeten zien)
-docker ps
+sudo docker ps
 
 # Test of de frontend reageert
 curl -I http://localhost:3000
 
 # Je credentials opzoeken:
-cat /opt/supabase/credentials.txt`}</CodeBlock>
+sudo cat /opt/supabase/credentials.txt`}</CodeBlock>
 
             <p className="mt-3"><strong>API testen:</strong> Kopieer de <strong>Anon Key</strong> uit de output hierboven en plak die in het volgende commando:</p>
             <CodeBlock fill={fill}>{`# Vervang <ANON_KEY> met de key uit credentials.txt
@@ -521,10 +521,10 @@ https://jouw-domein.nl:8080   → Supabase Studio (admin paneel)`}</CodeBlock>
           <>
             <Location icon="terminal" text="Terminal op Server A (backend)" />
             <CodeBlock fill={fill}>{`# Controleer of alle Supabase containers draaien
-docker ps
+sudo docker ps
 
 # Credentials opzoeken:
-cat /opt/supabase/credentials.txt`}</CodeBlock>
+sudo cat /opt/supabase/credentials.txt`}</CodeBlock>
 
             <p className="mt-3"><strong>API testen:</strong> Kopieer de <strong>Anon Key</strong> uit de output hierboven:</p>
             <CodeBlock fill={fill}>{`# Vervang <ANON_KEY> met de key uit credentials.txt
@@ -534,7 +534,7 @@ curl http://localhost:8000/rest/v1/ -H "apikey: <ANON_KEY>"
 
             <Location icon="terminal" text="Terminal op Server B (frontend)" />
             <CodeBlock fill={fill}>{`# Controleer of de frontend draait
-docker ps
+sudo docker ps
 curl -I http://localhost:3000`}</CodeBlock>
 
             <Location icon="browser" text="Browser op je eigen computer" />
@@ -552,7 +552,7 @@ curl -I http://localhost:3000`}</CodeBlock>
           <>
             <Location icon="terminal" text="Terminal op je VM" />
             <CodeBlock fill={fill}>{`# Eén commando om alles te updaten:
-lovable-update
+sudo lovable-update
 
 # Dit doet:
 # 1. git pull in /opt/lovable-infra (infra-updates)
@@ -565,12 +565,12 @@ lovable-update
           <>
             <Location icon="terminal" text="Terminal op Server B (frontend)" />
             <CodeBlock fill={fill}>{`# Update de frontend:
-lovable-update
+sudo lovable-update
 
 # Dit doet: git pull → docker build → restart container`}</CodeBlock>
             <Location icon="terminal" text="Terminal op Server A (alleen bij database-wijzigingen)" />
             <CodeBlock fill={fill}>{`# Update de backend (incl. migraties):
-lovable-update
+sudo lovable-update
 
 # Dit doet: git pull (infra + app) → nieuwe migraties draaien → Supabase herstarten`}</CodeBlock>
             <Tip>Als je bij de installatie van Server A hebt gekozen om de app-repo te clonen voor migraties, wordt deze automatisch mee-geüpdatet door <CopyCode fill={fill}>lovable-update</CopyCode>.</Tip>
@@ -633,7 +633,7 @@ SMTP_SENDER_NAME=Mijn App`}</CodeBlock>
 sudo nano /opt/supabase/docker-compose.yml`}</CodeBlock>
 
           <p>Herstart de auth container:</p>
-          <CodeBlock fill={fill}>{`cd /opt/supabase && docker compose restart auth`}</CodeBlock>
+          <CodeBlock fill={fill}>{`cd /opt/supabase && sudo docker compose restart auth`}</CodeBlock>
           <Tip>Voor Gmail: gebruik een <a href="https://myaccount.google.com/apppasswords" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">App-wachtwoord</a>, niet je gewone wachtwoord. Je hebt 2FA nodig om een App-wachtwoord aan te maken.</Tip>
         </div>
 
@@ -667,17 +667,17 @@ GOTRUE_EXTERNAL_GOOGLE_SECRET=jouw-secret
 GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=https://jouw-domein.nl/auth/v1/callback
 
 # Herstart auth
-cd /opt/supabase && docker compose restart auth`}</CodeBlock>
+cd /opt/supabase && sudo docker compose restart auth`}</CodeBlock>
         </div>
       </Step>
 
       {/* Stap: Troubleshooting */}
       <Step id="troubleshooting" number={steps.findIndex(s => s.id === "troubleshooting") + 1} title="Troubleshooting">
         <div className="space-y-4">
-          <TroubleItem q="Container start niet op" a={`Check logs: docker logs supabase-db (of andere containernaam). Vaak een verkeerd wachtwoord of poort-conflict.`} />
-          <TroubleItem q="Frontend laadt niet" a="Check of de container draait: docker ps. Test lokaal: curl http://localhost:3000. Check Nginx config: sudo nginx -t" />
+          <TroubleItem q="Container start niet op" a={`Check logs: sudo docker logs supabase-db (of andere containernaam). Vaak een verkeerd wachtwoord of poort-conflict.`} />
+          <TroubleItem q="Frontend laadt niet" a="Check of de container draait: sudo docker ps. Test lokaal: curl http://localhost:3000. Check Nginx config: sudo nginx -t" />
           <TroubleItem q="SSL werkt niet" a={distro === "debian" ? "Controleer of poort 80 en 443 open staan in Proxmox firewall én UFW. Draai opnieuw: sudo certbot --nginx -d jouw-domein.nl" : "Controleer of poort 80 en 443 open staan in Proxmox firewall én firewalld (sudo firewall-cmd --list-all). Draai opnieuw: sudo certbot --nginx -d jouw-domein.nl"} />
-          <TroubleItem q="Database connectie mislukt" a={`Check of PostgreSQL draait: docker exec supabase-db pg_isready -U supabase.${mode === "split" ? " Bij split: check of poort 8000 open staat op Server A met: curl http://SERVER_A_IP:8000/rest/v1/" : ""}`} />
+          <TroubleItem q="Database connectie mislukt" a={`Check of PostgreSQL draait: sudo docker exec supabase-db pg_isready -U supabase.${mode === "split" ? " Bij split: check of poort 8000 open staat op Server A met: curl http://SERVER_A_IP:8000/rest/v1/" : ""}`} />
           <TroubleItem q="Git pull mislukt" a="Check deploy key: ssh -T git@github.com. Controleer ~/.ssh/config. Zorg dat de deploy key op GitHub staat." />
           <TroubleItem q="Supabase API geeft 401" a="Controleer of ANON_KEY in .env.production (frontend) overeenkomt met de key in /opt/supabase/.env (backend). Deze moeten exact gelijk zijn." />
           {mode === "split" && (
@@ -705,13 +705,13 @@ cd /opt/supabase && docker compose restart auth`}</CodeBlock>
 sudo mkdir -p /opt/backups
 
 # Volledige backup
-docker exec supabase-db pg_dump -U supabase postgres > /opt/backups/backup_$(date +%Y%m%d).sql
+sudo docker exec supabase-db pg_dump -U supabase postgres > /opt/backups/backup_$(date +%Y%m%d).sql
 
 # Backup met compressie (kleiner bestand)
-docker exec supabase-db pg_dump -U supabase -Fc postgres > /opt/backups/backup_$(date +%Y%m%d).dump
+sudo docker exec supabase-db pg_dump -U supabase -Fc postgres > /opt/backups/backup_$(date +%Y%m%d).dump
 
 # Restore (terugzetten)
-docker exec -i supabase-db psql -U supabase -d postgres < /opt/backups/backup_20240101.sql`}</CodeBlock>
+sudo docker exec -i supabase-db psql -U supabase -d postgres < /opt/backups/backup_20240101.sql`}</CodeBlock>
         </div>
 
         <div className="mt-4 rounded-lg border border-border bg-muted/30 p-4">
@@ -725,10 +725,10 @@ docker exec -i supabase-db psql -U supabase -d postgres < /opt/backups/backup_20
 sudo crontab -e
 
 # Voeg deze regel toe (dagelijkse backup om 3:00 's nachts):
-0 3 * * * mkdir -p /opt/backups && docker exec supabase-db pg_dump -U supabase -Fc postgres > /opt/backups/db_$(date +\\%Y\\%m\\%d).dump 2>&1`}</CodeBlock>
+0 3 * * * mkdir -p /opt/backups && sudo docker exec supabase-db pg_dump -U supabase -Fc postgres > /opt/backups/db_$(date +\\%Y\\%m\\%d).dump 2>&1`}</CodeBlock>
 
           <CodeBlock fill={fill} title="Storage backup (geüploade bestanden)">{`# Supabase Storage bestanden backuppen
-tar -czf /opt/backups/storage_backup_$(date +%Y%m%d).tar.gz /opt/supabase/volumes/storage/`}</CodeBlock>
+sudo tar -czf /opt/backups/storage_backup_$(date +%Y%m%d).tar.gz /opt/supabase/volumes/storage/`}</CodeBlock>
         </div>
 
         <Tip>Bewaar backups op een andere locatie — gebruik <CopyCode fill={fill}>rsync</CopyCode> of <InfoTooltip text="Bestanden kopiëren tussen je computer en een server via SSH." /> naar een andere Proxmox VM of externe opslag.</Tip>
