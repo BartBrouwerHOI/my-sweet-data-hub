@@ -131,12 +131,13 @@ Zelfde, maar stap 4 wordt: Server A (database) + Server B (frontend)
 ## Belangrijke ontwerpbeslissingen
 
 1. **Infra-repo is publiek (HTTPS), app-repo is privé (SSH deploy key)** — voorkomt de "twee deploy keys op GitHub"-complexiteit
-2. **Markerbestand `.install_mode`** — geschreven door install.sh, gelezen door update.sh fallback voor correcte mode-detectie
-3. **Migratie-tracking via `.migrations_done/`** — voorkomt dubbel draaien van SQL migraties
-4. **Drie varianten `lovable-update`** — install.sh genereert een mode-specifiek update-script (full=5 stappen, database=4, frontend=3)
-5. **`JOUW_ANON_KEY` staat NIET in kopieerbare blokken** — beheerder moet key uit `credentials.txt` halen om copy-paste fouten te voorkomen
-6. **Autodetectie SPA vs SSR** — via `package.json` check op `@tanstack/react-start`
-7. **Autodetectie Debian vs RHEL** — via `/etc/os-release`, kiest juiste package manager en firewall
+2. **Geen secrets in de codebase** — alle wachtwoorden, JWT secrets en API keys worden pas op de server gegenereerd door `install.sh`. De bestanden in deze repo (`docker-compose.yml`, `kong.yml`) gebruiken `${VARIABELE}` placeholders. Commit nooit echte waarden.
+3. **Markerbestand `.install_mode`** — geschreven door install.sh, gelezen door update.sh fallback voor correcte mode-detectie
+4. **Migratie-tracking via `.migrations_done/`** — voorkomt dubbel draaien van SQL migraties
+5. **Drie varianten `lovable-update`** — install.sh genereert een mode-specifiek update-script (full=5 stappen, database=4, frontend=3)
+6. **`JOUW_ANON_KEY` staat NIET in kopieerbare blokken** — beheerder moet key uit `credentials.txt` halen om copy-paste fouten te voorkomen
+7. **Autodetectie SPA vs SSR** — via `package.json` check op `@tanstack/react-start`
+8. **Autodetectie Debian vs RHEL** — via `/etc/os-release`, kiest juiste package manager en firewall
 
 ## Tech stack
 
