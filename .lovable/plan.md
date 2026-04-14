@@ -1,97 +1,51 @@
 
 
-## Root Cause Analyse
+## Probleem
 
-Er zijn **drie fundamentele problemen** waardoor de DB unhealthy blijft:
+Migratie `20260119083612` faalt omdat het een `INSERT INTO user_roles` doet met een hardcoded `user_id` (`fa761b51-...`) die niet in `profiles` bestaat. Dit is seed-data uit development die niet op een schone productie-database werkt.
 
-### 1. `POSTGRES_USER: supabase` is verkeerd
-De officiële Supabase postgres image is gebouwd met `postgres` als superuser. De image heeft ingebouwde init-scripts die `postgres` als eigenaar verwachten. Door `POSTGRES_USER: supabase` te zetten probeer je een andere gebruiker als superuser te gebruiken — dit conflicteert met de ingebouwde scripts in de image die `postgres` verwachten.
+## Goede nieuws
 
-De officiële `.env.example` heeft helemaal geen `POSTGRES_USER` — het gebruikt gewoon de standaard `postgres` user.
+De database is **healthy**, alle Supabase services draaien, en 22 van de ~50 migraties zijn succesvol uitgevoerd. Alleen deze ene migratie blokkeert de rest.
 
-### 2. Ontbrekende init-scripts: `roles.sql` en `jwt.sql`
-De officiële Supabase docker-compose mount **specifieke SQL-bestanden** die wachtwoorden configureren:
-- `roles.sql` — zet het `POSTGRES_PASSWORD` op de service-rollen (`authenticator`, `supabase_auth_admin`, `supabase_storage_admin`)
-- `jwt.sql` — configureert `app.settings.jwt_secret` op database-niveau (PostgREST heeft dit nodig)
+## Aanpak
 
-Zonder `roles.sql` kennen de service-rollen geen wachtwoord → GoTrue, Storage, PostgREST kunnen niet inloggen → ze crashen → Kong start niet → Studio start niet.
+### 1. Fix de migratie in de app-repo
 
-### 3. Ons custom `00-supabase-init.sql` overschrijft de hele init-dir
-We mounten `./volumes/db/init:/docker-entrypoint-initdb.d` — dit **vervangt de hele init-directory** van de image. De ingebouwde init-scripts van de image worden niet meer gevonden. Onze `00-supabase-init.sql` is een gebrekkige copy van wat de image zelf al doet, maar mist cruciale stukken.
-
-### 4. Healthcheck gebruiker klopt niet
-De officiële healthcheck gebruikt `pg_isready -U postgres`, niet `-U supabase`. 
-
-## Plan
-
-### 1. `docker-compose.yml` — Afstemmen op officiële Supabase config
-
-**db service:**
-- Verwijder `POSTGRES_USER: supabase` (gebruik standaard `postgres`)
-- Verwijder de brede `./volumes/db/init:/docker-entrypoint-initdb.d` mount
-- Mount in plaats daarvan specifieke bestanden zoals de officiële compose doet:
-  - `./volumes/db/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql`
-  - `./volumes/db/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql`
-- Healthcheck: `pg_isready -U postgres -h localhost`
-- Retries: 10 (was 5)
-- Voeg `JWT_SECRET` en `JWT_EXP` toe als environment variables (nodig voor jwt.sql)
-
-**rest service:**
-- Verander `PGRST_DB_URI` user van `authenticator` (klopt al)
-
-**meta service:**
-- Verander `PG_META_DB_USER` van `supabase` naar `supabase_admin` (of `postgres`)
-
-### 2. Nieuwe bestanden: `volumes/db/roles.sql` en `volumes/db/jwt.sql`
-
-**`roles.sql`** (exact zoals officieel):
+De migratie `20260119083612_fc4680d3-4321-408e-ac77-817040a08a81.sql` bevat waarschijnlijk iets als:
 ```sql
-\set pgpass `echo "$POSTGRES_PASSWORD"`
-ALTER USER authenticator WITH PASSWORD :'pgpass';
-ALTER USER supabase_auth_admin WITH PASSWORD :'pgpass';
-ALTER USER supabase_storage_admin WITH PASSWORD :'pgpass';
+INSERT INTO user_roles (user_id, role) VALUES ('fa761b51-...', 'admin');
 ```
 
-**`jwt.sql`** (exact zoals officieel):
+Dit moet conditioneel worden:
 ```sql
-\set jwt_secret `echo "$JWT_SECRET"`
-\set jwt_exp `echo "$JWT_EXP"`
-ALTER DATABASE postgres SET "app.settings.jwt_secret" TO :'jwt_secret';
-ALTER DATABASE postgres SET "app.settings.jwt_exp" TO :'jwt_exp';
+INSERT INTO user_roles (user_id, role)
+SELECT 'fa761b51-...', 'admin'
+WHERE EXISTS (SELECT 1 FROM profiles WHERE id = 'fa761b51-...');
 ```
 
-### 3. `install.sh` — Aanpassen
+Of helemaal verwijderd als het puur development seed-data is.
 
-- Stop met kopiëren en bewerken van `00-supabase-init.sql`
-- Kopieer in plaats daarvan `roles.sql` en `jwt.sql` naar de Supabase dir
-- Voeg `JWT_EXP=3600` toe aan de `.env` file
-- Pas de `wait_for_bootstrap()` aan om `postgres` user te gebruiken i.p.v. `supabase`
+### 2. Opnieuw draaien
 
-### 4. `update.sh` — Aanpassen
+Na de fix in de app-repo:
+```bash
+cd /opt/lovable-app && git pull
+lovable-update
+```
 
-- Verwijder referenties naar `00-supabase-init.sql`
-
-### 5. `00-supabase-init.sql` — Kan weg
-
-Dit bestand is niet meer nodig. De image regelt alles zelf; `roles.sql` en `jwt.sql` vullen de wachtwoorden aan.
+De migratie-runner pakt alleen de niet-voltooide migraties op (alles vanaf `20260119083612`).
 
 ## Bestanden
 
 | Bestand | Wijziging |
 |---|---|
-| `docker-compose.yml` | Correcte user, healthcheck, specifieke volume mounts, JWT env vars |
-| `volumes/db/roles.sql` | Nieuw — wachtwoorden voor service-rollen |
-| `volumes/db/jwt.sql` | Nieuw — JWT configuratie op DB-niveau |
-| `install.sh` | Stop met init-sql bewerking, kopieer roles.sql + jwt.sql |
-| `update.sh` | Verwijder init-sql referenties |
-| `volumes/db/init/00-supabase-init.sql` | Verwijderen (niet meer nodig) |
+| `supabase/migrations/20260119083612_fc4680d3-4321-408e-ac77-817040a08a81.sql` | INSERT conditioneel maken of seed-data verwijderen |
 
-## Verwacht resultaat
+## Alternatief (sneller, geen code-wijziging)
 
-Na reset (`docker compose down -v && rm -rf volumes/db/data`) en herinstallatie:
-- De image draait zijn eigen ingebouwde init-scripts (rollen, schema's, extensions)
-- `roles.sql` zet de juiste wachtwoorden op alle service-rollen
-- `jwt.sql` configureert JWT op database-niveau
-- DB wordt healthy, alle services starten correct
-- GoTrue maakt het `auth` schema klaar, waarna migraties succesvol kunnen draaien
+Als je niet wilt wachten op een code-push, kun je op de VPS handmatig de INSERT-regel overslaan:
+1. Open de migratie: `nano /opt/lovable-app/supabase/migrations/20260119083612_fc4680d3-4321-408e-ac77-817040a08a81.sql`
+2. Verwijder of comment de `INSERT INTO user_roles` regel met de hardcoded UUID
+3. Draai `lovable-update`
 
