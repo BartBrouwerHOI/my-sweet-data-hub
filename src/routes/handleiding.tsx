@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { Copy, Check, Terminal, Globe, Monitor, Info } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Copy, Check, Terminal, Globe, Monitor, Info, Settings } from "lucide-react";
 
 export const Route = createFileRoute("/handleiding")({
   head: () => ({
