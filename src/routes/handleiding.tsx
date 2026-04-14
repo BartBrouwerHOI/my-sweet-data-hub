@@ -24,11 +24,11 @@ function HandleidingPage() {
   const singleSteps = [
     { id: "vereisten", title: "Vereisten" },
     { id: "architectuur", title: "Architectuur" },
-    { id: "deploy-key", title: "GitHub deploy key instellen" },
-    { id: "installatie", title: "Installatie" },
-    { id: "na-installatie", title: "Na installatie" },
-    { id: "updates", title: "Updates draaien" },
-    { id: "data-migratie", title: "Data migreren uit Lovable Cloud" },
+    { id: "deploy-key", title: "GitHub deploy key instellen", badge: "verplicht" as const },
+    { id: "installatie", title: "Installatie", badge: "verplicht" as const },
+    { id: "na-installatie", title: "Na installatie", badge: "verplicht" as const },
+    { id: "updates", title: "Updates draaien", badge: "wanneer-nodig" as const },
+    { id: "data-migratie", title: "Data migreren uit Lovable Cloud", badge: "optioneel" as const },
     { id: "smtp-oauth", title: "SMTP & OAuth instellen" },
     { id: "troubleshooting", title: "Troubleshooting" },
     { id: "backup", title: "Backup" },
@@ -37,12 +37,12 @@ function HandleidingPage() {
   const splitSteps = [
     { id: "vereisten", title: "Vereisten" },
     { id: "architectuur", title: "Architectuur" },
-    { id: "deploy-key", title: "GitHub deploy key instellen" },
-    { id: "split-backend", title: "Server A — Supabase backend" },
-    { id: "split-frontend", title: "Server B — React frontend" },
-    { id: "na-installatie", title: "Na installatie" },
-    { id: "updates", title: "Updates draaien" },
-    { id: "data-migratie", title: "Data migreren uit Lovable Cloud" },
+    { id: "deploy-key", title: "GitHub deploy key instellen", badge: "verplicht" as const },
+    { id: "split-backend", title: "Server A — Supabase backend", badge: "verplicht" as const },
+    { id: "split-frontend", title: "Server B — React frontend", badge: "verplicht" as const },
+    { id: "na-installatie", title: "Na installatie", badge: "verplicht" as const },
+    { id: "updates", title: "Updates draaien", badge: "wanneer-nodig" as const },
+    { id: "data-migratie", title: "Data migreren uit Lovable Cloud", badge: "optioneel" as const },
     { id: "smtp-oauth", title: "SMTP & OAuth instellen" },
     { id: "troubleshooting", title: "Troubleshooting" },
     { id: "backup", title: "Backup" },
@@ -100,6 +100,7 @@ function HandleidingPage() {
             ? "Alles op één VM: React frontend + volledige Supabase stack. Makkelijkst om te beginnen."
             : "Server A draait Supabase (backend), Server B draait de React frontend. Beter schaalbaar."}
         </p>
+        <p className="mt-1 text-xs text-primary/80 font-medium">💡 Twijfel je? Kies Single server — je kunt later altijd splitsen.</p>
       </div>
 
       {/* Distro toggle */}
@@ -143,6 +144,7 @@ function HandleidingPage() {
           {steps.map((step) => (
             <li key={step.id}>
               <a href={`#${step.id}`} className="hover:underline">{step.title}</a>
+              {"badge" in step && step.badge && <StepBadge type={step.badge} />}
             </li>
           ))}
         </ol>
@@ -230,7 +232,7 @@ function HandleidingPage() {
       </Step>
 
       {/* Stap: Deploy key */}
-      <Step id="deploy-key" number={steps.findIndex(s => s.id === "deploy-key") + 1} title={<>GitHub <InfoTooltip text="Een SSH-sleutel die alleen leesrechten heeft op één specifieke GitHub repo. Hiermee kan je server de code downloaden zonder wachtwoord." /> instellen</>}>
+      <Step id="deploy-key" number={steps.findIndex(s => s.id === "deploy-key") + 1} title={<>GitHub <InfoTooltip text="Een SSH-sleutel die alleen leesrechten heeft op één specifieke GitHub repo. Hiermee kan je server de code downloaden zonder wachtwoord." /> instellen <StepBadge type="verplicht" /></>}>
         <p>
           Een <strong>deploy key</strong> is een <InfoTooltip text="Veilige verbinding met je server op afstand, zoals remote desktop maar dan via tekst." />-sleutel waarmee je server je privé GitHub repo kan downloaden zonder wachtwoord. 
           Je maakt een sleutel aan op je server en voegt het publieke deel toe aan GitHub.
@@ -271,7 +273,7 @@ ssh -T git@github.com`}</CodeBlock>
 
       {/* === SINGLE MODE: Installatie === */}
       {mode === "single" && (
-        <Step id="installatie" number={steps.findIndex(s => s.id === "installatie") + 1} title="Installatie">
+        <Step id="installatie" number={steps.findIndex(s => s.id === "installatie") + 1} title={<>Installatie <StepBadge type="verplicht" /></>}>
           <Location icon="terminal" text="Terminal op je VM" />
           <p>Clone je repo en draai het install-script:</p>
           <CodeBlock>{`# Clone je repo (vervang met je eigen GitHub gebruikersnaam en repo naam)
@@ -354,7 +356,7 @@ sudo bash install.sh
       )}
 
       {/* Stap: Na installatie */}
-      <Step id="na-installatie" number={steps.findIndex(s => s.id === "na-installatie") + 1} title="Na installatie">
+      <Step id="na-installatie" number={steps.findIndex(s => s.id === "na-installatie") + 1} title={<>Na installatie <StepBadge type="verplicht" /></>}>
         <p>Controleer of alles werkt:</p>
         {mode === "single" ? (
           <>
@@ -396,7 +398,8 @@ curl http://localhost/rest/v1/ -H "apikey: JOUW_ANON_KEY"`}</CodeBlock>
       </Step>
 
       {/* Stap: Updates */}
-      <Step id="updates" number={steps.findIndex(s => s.id === "updates") + 1} title="Updates draaien">
+      <Step id="updates" number={steps.findIndex(s => s.id === "updates") + 1} title={<>Updates draaien <StepBadge type="wanneer-nodig" /></>}>
+        <p className="italic text-muted-foreground">Je hoeft dit alleen te doen nadat je wijzigingen hebt gemaakt in Lovable. Geen wijzigingen? Dan kun je deze stap overslaan.</p>
         <p>Na wijzigingen in Lovable (die automatisch naar GitHub pusht):</p>
         {mode === "single" ? (
           <>
@@ -433,7 +436,8 @@ done`}</CodeBlock>
       </Step>
 
       {/* Stap: Data migratie */}
-      <Step id="data-migratie" number={steps.findIndex(s => s.id === "data-migratie") + 1} title="Data migreren uit Lovable Cloud">
+      <Step id="data-migratie" number={steps.findIndex(s => s.id === "data-migratie") + 1} title={<>Data migreren uit Lovable Cloud <StepBadge type="optioneel" /></>}>
+        <p className="italic text-muted-foreground">Alleen nodig als je bestaande data hebt in Lovable Cloud. Start je een nieuwe app zonder bestaande data? Sla deze stap over en ga door naar de volgende.</p>
         <p>Als je bestaande data hebt in Lovable Cloud kun je die overzetten:</p>
 
         <Location icon="browser" text="Lovable.dev in je browser" />
@@ -542,7 +546,14 @@ cd /opt/supabase && docker compose restart auth`}</CodeBlock>
       {/* Stap: Backup */}
       <Step id="backup" number={steps.findIndex(s => s.id === "backup") + 1} title="Backup">
         <Location icon="terminal" text={`Terminal op je ${mode === "split" ? "backend-server (A)" : "VM"}`} />
-        <p>Maak regelmatig backups van je database:</p>
+
+        {/* Database dump — Aanbevolen */}
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="rounded bg-destructive px-2 py-0.5 text-xs font-semibold text-destructive-foreground">Aanbevolen</span>
+            <h4 className="font-semibold text-foreground">Database backup</h4>
+          </div>
+          <p>Maak regelmatig backups van je database:</p>
         <CodeBlock title="Database dump">{`# Maak eerst de backup-map aan
 sudo mkdir -p /opt/backups
 
@@ -555,6 +566,16 @@ docker exec supabase-db pg_dump -U supabase -Fc postgres > /opt/backups/backup_$
 # Restore (terugzetten)
 docker exec -i supabase-db psql -U supabase -d postgres < /opt/backups/backup_20240101.sql`}</CodeBlock>
 
+        </div>
+
+        {/* Automatische backup + Storage — Optioneel */}
+        <div className="mt-4 rounded-lg border border-border bg-muted/30 p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="rounded bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">Optioneel</span>
+            <h4 className="font-semibold text-foreground">Automatische & storage backup</h4>
+          </div>
+          <p className="mb-3 text-sm text-muted-foreground">Handig maar niet strikt noodzakelijk. Je kunt deze stap overslaan als je handmatige backups maakt.</p>
+
         <CodeBlock title={<>Automatische backup (<InfoTooltip text="Geplande taken die automatisch draaien op vaste tijden — zoals een wekker voor je server." />)</>}>{`# Open de cron-editor
 sudo crontab -e
 
@@ -563,6 +584,8 @@ sudo crontab -e
 
         <CodeBlock title="Storage backup (geüploade bestanden)">{`# Supabase Storage bestanden backuppen
 tar -czf /opt/backups/storage_backup_$(date +%Y%m%d).tar.gz /opt/supabase/volumes/storage/`}</CodeBlock>
+        </div>
+
         <Tip>Bewaar backups op een andere locatie — gebruik <code className="rounded bg-muted px-1.5 py-0.5 text-xs">rsync</code> of <InfoTooltip text="Bestanden kopiëren tussen je computer en een server via SSH." /> naar een andere Proxmox VM of externe opslag.</Tip>
       </Step>
 
