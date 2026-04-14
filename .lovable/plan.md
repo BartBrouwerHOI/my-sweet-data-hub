@@ -1,36 +1,52 @@
 
 
-## Plan: Verificatiestap toevoegen na git clone + troubleshooting voor ontbrekend install.sh
+## Plan: Fouten in het installatieproces fixen
 
-### Probleem
+### Gevonden problemen
 
-Na een succesvolle `git clone` geeft `bash install.sh` de fout "No such file or directory". Dit kan twee oorzaken hebben:
+**1. `ls install.sh` staat op de verkeerde plek (Split mode A en B)**
 
-1. **Het bestand is niet gecommit naar GitHub** — Lovable heeft het lokaal, maar het is mogelijk niet gepusht naar de repo
-2. **De gebruiker staat niet in de juiste directory** — onwaarschijnlijk gezien de screenshot
+In de single mode staat de volgorde correct (`cd` → `ls`), maar bij Split Server A (regel 424-428) en Split Server B (regel 469-473) wordt `ls install.sh` uitgevoerd VÓÓR `cd /opt/lovable-app`. Daardoor controleert het in de verkeerde directory.
 
-### Wijzigingen in `src/routes/handleiding.tsx`
-
-**1. Verificatiestap toevoegen na elke git clone** (3 plekken: single, split A, split B)
-
-Na het clone-commando en vóór `sudo bash install.sh`, een controle toevoegen:
-
-```bash
-# Controleer of install.sh aanwezig is
-ls install.sh
+Huidige volgorde (fout):
+```
+git clone ... /opt/lovable-app
+ls install.sh              ← VERKEERD: nog niet in /opt/lovable-app!
+cd /opt/lovable-app
+sudo bash install.sh
 ```
 
-**2. Warn/Tip toevoegen** na de clone-stappen met troubleshooting als het bestand ontbreekt:
+Correcte volgorde:
+```
+git clone ... /opt/lovable-app
+cd /opt/lovable-app
+ls install.sh              ← NU in de juiste map
+sudo bash install.sh
+```
 
-> **install.sh niet gevonden?** Dan is het bestand waarschijnlijk niet mee-gepusht naar GitHub. Controleer in je GitHub repo of `install.sh` in de root staat. Zo niet:
-> 1. Ga naar Lovable → Connectors → GitHub en controleer of de sync actief is
-> 2. Of download `install.sh` handmatig: `curl -O https://raw.githubusercontent.com/JOUW-USER/JOUW-REPO/main/install.sh`
+**2. curl fallback URL hardcodeert `/main/` branch**
 
-**3. Fallback curl-commando** toevoegen als alternatief voor als het bestand ontbreekt.
+De fallback `curl -O https://raw.githubusercontent.com/.../main/install.sh` gaat ervan uit dat de default branch `main` heet. Lovable's GitHub sync kan ook `master` of een andere branch gebruiken. In de screenshot van de gebruiker haalde curl 14 bytes op (een 404-pagina), wat betekent dat het bestand niet op die URL staat.
 
-### Bestand
+Oplossing: Tip toevoegen dat de branch kan afwijken, en de gebruiker aanraden om eerst op GitHub te controleren welke branch het is.
+
+**3. `install.sh` bestaat mogelijk niet in de GitHub repo**
+
+Het bestand `install.sh` staat wél in het Lovable-project, maar als de GitHub sync niet up-to-date is, mist het in de repo. De handleiding vermeldt dit al als troubleshooting, maar de curl-fallback werkt dan ook niet (zelfde repo). 
+
+Oplossing: Voeg een extra fallback optie toe — kopieer het script handmatig vanuit de handleiding-pagina zelf, of verwijs naar het "rauw" bekijken op GitHub om de branch te controleren.
+
+### Wijzigingen
 
 | Bestand | Actie |
 |---------|-------|
-| `src/routes/handleiding.tsx` | Verificatiestap + troubleshooting tip na git clone op 3 plekken |
+| `src/routes/handleiding.tsx` | Fix `cd`/`ls` volgorde in Split A en B; verbeter curl fallback met branch-tip |
+
+### Details
+
+**Split Server A (regel ~417-431):** Verplaats `cd /opt/lovable-app` naar vóór `ls install.sh`
+
+**Split Server B (regel ~462-478):** Zelfde fix
+
+**Curl fallback (3 plekken):** Voeg opmerking toe: "Controleer op GitHub welke branch je gebruikt (main of master)" en pas de URL aan zodat de branchnaam ook vervangbaar is.
 
