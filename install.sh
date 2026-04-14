@@ -126,6 +126,8 @@ select_mode() {
 }
 
 # --- User input ---
+CLONE_FOR_MIGRATIONS=""
+
 gather_input() {
   echo ""
 
@@ -142,6 +144,16 @@ gather_input() {
     echo ""
     read -sp "Kies een admin dashboard wachtwoord: " DASHBOARD_PASSWORD
     echo ""
+  fi
+
+  # In database mode: vraag hier al of de beheerder migraties wil
+  if [[ "$INSTALL_MODE" == "database" ]]; then
+    echo ""
+    echo -e "${BLUE}Wil je de app-repo clonen voor automatische migraties?${NC}"
+    echo "  Dit is nodig als je app database-migraties heeft."
+    echo "  Het script cloned de app-repo naar $APP_DIR (alleen voor migraties, geen build)."
+    echo ""
+    read -p "App-repo clonen voor migraties? (j/n): " CLONE_FOR_MIGRATIONS
   fi
 }
 
@@ -365,10 +377,12 @@ ENVEOF
     cp "$INFRA_DIR/volumes/kong/kong.yml" "$SUPABASE_DIR/volumes/kong/kong.yml"
   fi
 
-  # Migraties komen uit de APP-repo (als ze bestaan)
+  # Migraties komen uit de APP-repo (als die gecloned is)
   if [[ -d "$APP_DIR/supabase/migrations" ]]; then
     log_info "Database migraties kopiëren vanuit app-repo..."
     cp "$APP_DIR/supabase/migrations/"*.sql "$SUPABASE_DIR/volumes/db/init/" 2>/dev/null || true
+  else
+    log_info "Geen app-repo gevonden — migraties overgeslagen."
   fi
 }
 
@@ -671,8 +685,48 @@ cd "\$SUPABASE_DIR" && docker compose up -d
 echo ""
 echo "✅ Update compleet!"
 UPDATEEOF
+  elif [[ "$INSTALL_MODE" == "frontend" ]]; then
+    # Frontend-only mode: geen migraties, geen database
+    cat > /usr/local/bin/lovable-update <<UPDATEEOF
+#!/bin/bash
+set -euo pipefail
+
+INFRA_DIR="$INFRA_DIR"
+APP_DIR="$APP_DIR"
+PROJECT_TYPE="$PROJECT_TYPE"
+
+echo "=== Lovable Frontend Updater ==="
+echo ""
+
+# 1. Update infra-repo
+echo "[1/3] Infra-repo updaten..."
+cd "\$INFRA_DIR" && git pull
+
+# 2. Update app-repo + rebuild
+echo "[2/3] App-code ophalen en bouwen (type: \$PROJECT_TYPE)..."
+cd "\$APP_DIR" && git pull
+if [[ "\$PROJECT_TYPE" == "spa" ]]; then
+  cp "\$INFRA_DIR/nginx/frontend-spa.conf" "\$APP_DIR/nginx.conf"
+  docker build -t lovable-frontend -f "\$INFRA_DIR/Dockerfile.spa" "\$APP_DIR"
+else
+  docker build -t lovable-frontend -f "\$INFRA_DIR/Dockerfile.ssr" "\$APP_DIR"
+fi
+
+# 3. Restart frontend container
+echo "[3/3] Frontend herstarten..."
+docker stop lovable-frontend 2>/dev/null || true
+docker rm lovable-frontend 2>/dev/null || true
+docker run -d \\
+  --name lovable-frontend \\
+  --restart unless-stopped \\
+  -p 3000:3000 \\
+  lovable-frontend
+
+echo ""
+echo "✅ Update compleet!"
+UPDATEEOF
   else
-    # Full of frontend mode: inclusief app rebuild
+    # Full mode: frontend + database + migraties
     cat > /usr/local/bin/lovable-update <<UPDATEEOF
 #!/bin/bash
 set -euo pipefail
@@ -755,7 +809,9 @@ print_summary() {
   echo -e "${GREEN}╔══════════════════════════════════════════════╗${NC}"
   echo -e "${GREEN}║         ✅ INSTALLATIE COMPLEET!              ║${NC}"
   echo -e "${GREEN}║         Modus: $(printf '%-30s' "$INSTALL_MODE") ║${NC}"
-  echo -e "${GREEN}║         Type:  $(printf '%-30s' "$PROJECT_TYPE") ║${NC}"
+  if [[ -n "$PROJECT_TYPE" ]]; then
+    echo -e "${GREEN}║         Type:  $(printf '%-30s' "$PROJECT_TYPE") ║${NC}"
+  fi
   echo -e "${GREEN}╚══════════════════════════════════════════════╝${NC}"
   echo ""
 
@@ -767,22 +823,22 @@ print_summary() {
     echo -e "     DB Wachtwoord:    ${YELLOW}$POSTGRES_PASSWORD${NC}"
     echo ""
 
-    cat > "$SUPABASE_DIR/credentials.txt" <<CREDEOF
-=== Lovable Supabase Credentials ===
-Generated: $(date)
-Mode: $INSTALL_MODE
-Project Type: $PROJECT_TYPE
-
-Anon Key: $ANON_KEY
-Service Role Key: $SERVICE_ROLE_KEY
-JWT Secret: $JWT_SECRET
-Database Password: $POSTGRES_PASSWORD
-Dashboard Password: $DASHBOARD_PASSWORD
-Admin Email: $ADMIN_EMAIL
-
-Infra Dir: $INFRA_DIR
-App Dir: $APP_DIR
-CREDEOF
+    {
+      echo "=== Lovable Supabase Credentials ==="
+      echo "Generated: $(date)"
+      echo "Mode: $INSTALL_MODE"
+      [[ -n "$PROJECT_TYPE" ]] && echo "Project Type: $PROJECT_TYPE"
+      echo ""
+      echo "Anon Key: $ANON_KEY"
+      echo "Service Role Key: $SERVICE_ROLE_KEY"
+      echo "JWT Secret: $JWT_SECRET"
+      echo "Database Password: $POSTGRES_PASSWORD"
+      echo "Dashboard Password: $DASHBOARD_PASSWORD"
+      echo "Admin Email: $ADMIN_EMAIL"
+      echo ""
+      echo "Infra Dir: $INFRA_DIR"
+      [[ -d "$APP_DIR/.git" ]] && echo "App Dir: $APP_DIR"
+    } > "$SUPABASE_DIR/credentials.txt"
     chmod 600 "$SUPABASE_DIR/credentials.txt"
     log_info "Credentials opgeslagen in: $SUPABASE_DIR/credentials.txt"
   fi
@@ -816,17 +872,8 @@ main() {
   if [[ "$INSTALL_MODE" != "database" ]]; then
     clone_app
     detect_project_type
-  else
-    # In database mode: clone app-repo optioneel voor migraties
-    echo ""
-    echo -e "${BLUE}Wil je de app-repo clonen voor automatische migraties?${NC}"
-    echo "  Dit is nodig als je app database-migraties heeft."
-    echo "  Het script cloned de app-repo naar $APP_DIR (alleen voor migraties, geen build)."
-    echo ""
-    read -p "App-repo clonen voor migraties? (j/n): " clone_for_migrations
-    if [[ "$clone_for_migrations" == "j" ]]; then
-      clone_app
-    fi
+  elif [[ "$CLONE_FOR_MIGRATIONS" == "j" ]]; then
+    clone_app
   fi
 
   case "$INSTALL_MODE" in

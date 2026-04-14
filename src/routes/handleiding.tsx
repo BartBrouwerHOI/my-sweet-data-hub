@@ -321,7 +321,11 @@ function HandleidingPage() {
           Voor je <strong>privé app-repo</strong> maak je een deploy key aan zodat je server de code kan downloaden.
         </p>
         {mode === "split" && (
-          <Warn>Herhaal deze stap op <strong>beide servers</strong> (A en B). Elke server krijgt een eigen sleutel.</Warn>
+          <Warn>
+            <strong>Server B</strong> (frontend) heeft altijd een deploy key nodig. 
+            <strong>Server A</strong> (database) heeft alleen een deploy key nodig als je bij de installatie kiest voor "app-repo clonen voor migraties". 
+            Zonder migraties kun je deze stap op Server A overslaan.
+          </Warn>
         )}
 
         <Location icon="terminal" text={`Terminal op je ${mode === "split" ? "server (herhaal voor beide)" : "VM"}`} />
@@ -498,6 +502,7 @@ curl http://localhost:8000/rest/v1/ -H "apikey: <ANON_KEY>"`}</CodeBlock>
             <CodeBlock fill={fill}>{`# Open deze adressen in je browser:
 https://jouw-domein.nl        → je app
 https://jouw-domein.nl:8080   → Supabase Studio (admin paneel)`}</CodeBlock>
+            <Tip>Werkt iets niet? Ga naar <a href="#troubleshooting" className="text-primary hover:underline font-medium">Troubleshooting</a>.</Tip>
           </>
         ) : (
           <>
@@ -521,6 +526,7 @@ curl -I http://localhost:3000`}</CodeBlock>
 
             <Location icon="browser" text="Browser op je eigen computer" />
             <p>Open <CopyCode fill={fill}>https://jouw-domein.nl</CopyCode> — je zou je app moeten zien.</p>
+            <Tip>Werkt iets niet? Ga naar <a href="#troubleshooting" className="text-primary hover:underline font-medium">Troubleshooting</a>.</Tip>
           </>
         )}
       </Step>
