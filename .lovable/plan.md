@@ -1,53 +1,56 @@
 
 
-## Plan: Handleiding herstructureren + technische fixes
+## Plan: Handleiding 100% correct maken + beginner-friendly
 
-### Probleem 1: Handleiding is verwarrend
-Single-server en split-server stappen staan door elkaar. De gebruiker moet eerst kiezen en dan alleen relevante stappen zien.
+### Gevonden bugs (kritiek)
 
-### Probleem 2: Technische fouten in de deployment stack
+**1. Verkeerde port mapping in install.sh**
+`docker run ... -p 3000:80` maar de Dockerfile draait Node.js op poort 3000, niet 80. Moet `-p 3000:3000` zijn. Dit staat op twee plekken: `start_frontend()` (regel 262) en in `update.sh` (regel 447). De handleiding noemt ook `-p 3000:80` bij handmatige updates.
 
-Na onderzoek heb ik deze kritische fouten gevonden:
+**2. Data migratie COPY-commando klopt niet**
+De handleiding zegt `\COPY ... FROM '/tmp/tabel.csv'` via `docker exec`, maar `/tmp/tabel.csv` is een pad op de HOST, niet in de container. Moet eerst `docker cp` doen naar de container, of stdin gebruiken:
+```
+cat /tmp/tabel.csv | docker exec -i supabase-db psql -U supabase -d postgres -c "\COPY public.tabel FROM STDIN WITH CSV HEADER"
+```
 
-**A. Dockerfile klopt niet voor TanStack Start**
-Het project gebruikt TanStack Start (SSR framework), maar de Dockerfile behandelt het als een statische site. TanStack Start bouwt naar `dist/` (client + server bundles), niet `.output/public`. Het is een Node.js server, geen statische Nginx site. De Dockerfile moet de app als Node.js process draaien, niet via Nginx.
+**3. Dubbele clone-stap**
+De handleiding zegt "clone je repo" EN daarna `install.sh` dat opnieuw probeert te clonen via `clone_app()`. Verwarrend — de handleiding moet kloppen met wat het script doet.
 
-**B. Nginx full-mode slaat Kong over**
-In full-mode proxy't Nginx rechtstreeks naar individuele services (poort 9999, 3001, 4000, 5000). Dit omzeilt Kong's API key validatie — een beveiligingsprobleem. Alle API-calls moeten via Kong (poort 8000) lopen.
+**4. Backup directory bestaat niet**
+Cron-job schrijft naar `/opt/backups/` maar die map wordt nergens aangemaakt.
 
-**C. Frontend container zit niet in het Docker netwerk**
-De frontend draait als losse `docker run`, niet in docker-compose. Daardoor kan het geen services bereiken via containernamen. Dit moet opgelost worden door de frontend aan het docker-compose netwerk toe te voegen, of alles via localhost+ports te doen (wat nu al deels gebeurt).
+### Verbeteringen voor leken
 
-### Oplossing
+**5. "Waar doe je dit?" labels toevoegen**
+Elke stap krijgt een duidelijke indicator:
+- `📍 Terminal op je VM` — voor commandos
+- `📍 GitHub.com` — voor deploy key toevoegen
+- `📍 Je eigen computer` — voor browser/SSH verbinding
 
-**1. Handleiding herstructureren met keuze-UI**
-- Bovenaan een toggle: "Single server" / "Split setup"
-- React state bepaalt welke stappen zichtbaar zijn
-- Gedeelde stappen (vereisten, deploy key, updates, backup) altijd zichtbaar
-- Single-specifieke stap: "Installatie" (één blok)
-- Split-specifieke stappen: "Server A (backend)" en "Server B (frontend)" apart
-- Inhoudsopgave past zich aan op basis van keuze
+**6. Meer uitleg toevoegen**
+- Wat is een terminal en hoe open je die (SSH uitleg)
+- Wat betekent `JOUW-USER/JOUW-REPO` — expliciet uitleggen dat je je eigen GitHub naam invult
+- Wat is een deploy key en waarom heb je die nodig
+- Bij split setup: duidelijk aangeven welke Anon Key je moet bewaren en waar die terugkomt
 
-**2. Dockerfile fixen**
-- TanStack Start draait als Node.js server, niet als statische Nginx site
-- Build output in `dist/`, start met `node dist/server/index.mjs` (of via het start script)
-- Alternatief: als het project puur client-side rendering doet (geen SSR server functions), dan kan het wel als statische site, maar dan moet de build output path kloppen
+**7. Stap volgorde verduidelijken**
+- Clone-stap verwijderen uit handleiding (het script doet dit zelf)
+- OF `clone_app()` uit install.sh verwijderen en handleiding de clone laten doen
+- Ik kies: handleiding laat de user clonen, script detecteert bestaande dir en doet `git pull`
 
-**3. Nginx config fixen (full mode)**
-- Alle Supabase API calls via Kong (poort 8000) routeren in plaats van individuele poorten
-- Consistent met hoe split-mode al werkt
+### Alle bestanden
 
-**4. Kleinere verbeteringen**
-- Kopieer-knop toevoegen aan codeblokken
-- Stappen nummering dynamisch maken op basis van keuze
-- Warning toevoegen dat SMTP moet geconfigureerd worden voor e-mail verificatie (nu staat `GOTRUE_MAILER_AUTOCONFIRM: true` wat onveilig is in productie)
+| Bestand | Wijziging |
+|---------|-----------|
+| `install.sh` | Fix `-p 3000:80` → `-p 3000:3000` op 2 plekken. Backup dir aanmaken. |
+| `src/routes/handleiding.tsx` | Locatie-labels per stap. COPY-commando fixen. Uitleg voor leken toevoegen. Handmatige update-commando port fixen. Backup mkdir toevoegen. |
 
-### Bestanden
-
-| Bestand | Actie |
-|---------|-------|
-| `src/routes/handleiding.tsx` | Herstructureren met single/split toggle + dynamische stappen |
-| `Dockerfile` | Fixen voor TanStack Start (Node.js server i.p.v. statische Nginx) |
-| `nginx/frontend.conf` | Aanpassen als reverse proxy naar Node.js app |
-| `install.sh` | Nginx full-mode fixen: API via Kong |
+### Wat al correct is (geverifieerd)
+- Kong config + environment variable substitution: correct
+- PostgREST `authenticator` role: standaard aanwezig in supabase/postgres image
+- JWT generatie in bash: werkend (HS256 met openssl)
+- Nginx routing via Kong poort 8000: correct
+- Deploy keys: twee verschillende keys op twee servers, beide als deploy key op dezelfde repo — GitHub staat dit toe
+- Docker Compose service dependencies + healthchecks: correct
+- TanStack Start SSR Dockerfile met `.output/server/index.mjs`: correct
 
