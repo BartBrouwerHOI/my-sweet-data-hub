@@ -976,7 +976,34 @@ clone_app() {
   if [[ -d "\$APP_DIR" && -f "\$APP_DIR/docker-compose.yml" ]]; then
     cd "\$APP_DIR" && git pull
   else
-    read -p "GitHub repo URL (SSH): " GITHUB_REPO
+    echo ""
+    echo -e "\${BLUE}Het script gaat nu je app-code clonen van GitHub.\${NC}"
+    echo "  Plak de SSH URL van je repo. Die vind je op GitHub → Code → SSH."
+    echo "  Voorbeeld: git@github.com:JOUW-USER/JOUW-REPO.git"
+    echo ""
+    echo -e "  \${YELLOW}⚠ Dit is NIET de inhoud van install.sh — alleen de repo-URL!\${NC}"
+    echo ""
+
+    while true; do
+      read -p "GitHub repo URL (SSH): " GITHUB_REPO
+      if [[ -z "\$GITHUB_REPO" ]]; then
+        log_error "Invoer is leeg. Plak de SSH URL van je GitHub repo."
+        continue
+      fi
+      if [[ "\$GITHUB_REPO" == *"#!/bin/bash"* || "\$GITHUB_REPO" == *$'\\n'* ]]; then
+        log_error "Het lijkt erop dat je de inhoud van install.sh hebt geplakt!"
+        echo "  Plak alleen de SSH URL, bijv.: git@github.com:user/repo.git"
+        continue
+      fi
+      if [[ ! "\$GITHUB_REPO" =~ ^git@github\\.com:.+/.+\\.git\$ ]]; then
+        log_error "Ongeldig formaat. Verwacht: git@github.com:USER/REPO.git"
+        echo "  Gevonden: \$GITHUB_REPO"
+        read -p "Toch doorgaan met deze URL? (j/n): " confirm
+        [[ "\$confirm" != "j" ]] && continue
+      fi
+      break
+    done
+
     log_info "SSH-verbinding met GitHub testen..."
     local ssh_output
     ssh_output=\$(ssh -T -o ConnectTimeout=10 git@github.com 2>&1 || true)
@@ -1206,9 +1233,12 @@ main "\$@"`;
               <p><strong>Stap 2:</strong> Plak de gekopieerde inhoud in nano → opslaan met <code className="rounded bg-muted px-1">Ctrl+O</code>, <code className="rounded bg-muted px-1">Enter</code>, sluiten met <code className="rounded bg-muted px-1">Ctrl+X</code></p>
               <p><strong>Stap 3:</strong> Maak uitvoerbaar en start de installatie:</p>
               <pre className="rounded bg-muted px-2 py-1 text-[11px]"><code>chmod +x /opt/lovable-app/install.sh{"\n"}cd /opt/lovable-app{"\n"}sudo bash install.sh</code></pre>
+              <p><strong>Stap 4:</strong> Als het script vraagt om <strong>GitHub repo URL</strong>, plak dan de SSH URL van je repo:</p>
+              <pre className="rounded bg-muted px-2 py-1 text-[11px]"><code>git@github.com:JOUW-USER/JOUW-REPO.git</code></pre>
+              <p className="text-muted-foreground">Die vind je op GitHub → <strong>Code</strong> knop → tabje <strong>SSH</strong>.</p>
             </div>
             <div className="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 text-foreground">
-              <strong>⚠️ Let op:</strong> Gebruik altijd <code className="rounded bg-muted px-1">sudo bash install.sh</code> — niet <code className="rounded bg-muted px-1">sudo install.sh</code> of <code className="rounded bg-muted px-1">./install.sh</code>. Zonder <code className="rounded bg-muted px-1">bash</code> herkent Linux het commando niet.
+              <strong>⚠️ Let op:</strong> Gebruik altijd <code className="rounded bg-muted px-1">sudo bash install.sh</code> — niet <code className="rounded bg-muted px-1">sudo install.sh</code> of <code className="rounded bg-muted px-1">./install.sh</code>. Plak bij de repo-URL vraag <strong>niet</strong> opnieuw de inhoud van install.sh!
             </div>
           </div>
         </div>
