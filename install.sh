@@ -583,6 +583,7 @@ CREDEOF
 # === Main ===
 main() {
   print_banner
+  detect_distro
   select_mode
   check_requirements
   gather_input
