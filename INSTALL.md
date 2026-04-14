@@ -4,6 +4,8 @@
 
 Dit project is een **universele deployment-toolkit** voor Lovable-projecten. Het bevat de infrastructuur (installer, Supabase stack, Dockerfiles) om elk Lovable-project te deployen op een VPS — zonder dat het doel-project zelf deployment-bestanden nodig heeft.
 
+> ⚠️ **Deze repository is publiek.** Zet hier **nooit** wachtwoorden, API keys, tokens of andere geheimen in. Alle secrets worden pas gegenereerd op de server door `install.sh` en staan alleen in `/opt/supabase/.env` en `/opt/supabase/credentials.txt` (beide `chmod 600`).
+
 ### Architectuur
 
 ```
