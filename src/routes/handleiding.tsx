@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, Terminal, Globe, Monitor } from "lucide-react";
 
 export const Route = createFileRoute("/handleiding")({
   head: () => ({
@@ -53,6 +53,21 @@ function HandleidingPage() {
       <h1 className="mb-2 text-3xl font-bold text-foreground">Installatiehandleiding</h1>
       <p className="mb-8 text-muted-foreground">Van lege Proxmox VM tot werkende applicatie — stap voor stap.</p>
 
+      {/* Introductie voor beginners */}
+      <div className="mb-8 rounded-lg border border-primary/20 bg-primary/5 p-5">
+        <h2 className="mb-2 text-sm font-semibold text-foreground">📖 Voordat je begint</h2>
+        <p className="mb-2 text-sm text-muted-foreground">
+          In deze handleiding voer je commando's uit op je server via een <strong className="text-foreground">terminal</strong>. 
+          Dit doe je door via SSH verbinding te maken met je VM:
+        </p>
+        <CodeBlock>{`ssh root@JOUW-SERVER-IP`}</CodeBlock>
+        <p className="text-sm text-muted-foreground">
+          Vervang <code className="rounded bg-muted px-1.5 py-0.5 text-xs text-foreground">JOUW-SERVER-IP</code> door het IP-adres van je Proxmox VM 
+          (te vinden in je Proxmox dashboard). Op Windows kun je <a href="https://www.putty.org/" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">PuTTY</a> of 
+          Windows Terminal gebruiken, op Mac/Linux open je gewoon de Terminal app.
+        </p>
+      </div>
+
       {/* Mode toggle */}
       <div className="mb-10 rounded-lg border border-border bg-muted/50 p-4">
         <p className="mb-3 text-sm font-medium text-foreground">Welke setup wil je?</p>
@@ -80,8 +95,8 @@ function HandleidingPage() {
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
           {mode === "single"
-            ? "Alles op één VM: React frontend + volledige Supabase stack."
-            : "Server A draait Supabase (backend), Server B draait de React frontend."}
+            ? "Alles op één VM: React frontend + volledige Supabase stack. Makkelijkst om te beginnen."
+            : "Server A draait Supabase (backend), Server B draait de React frontend. Beter schaalbaar."}
         </p>
       </div>
 
@@ -89,7 +104,7 @@ function HandleidingPage() {
       <nav className="mb-12 rounded-lg border border-border bg-muted/50 p-5">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Inhoud</h2>
         <ol className="list-inside list-decimal space-y-1 text-sm text-primary">
-          {steps.map((step, i) => (
+          {steps.map((step) => (
             <li key={step.id}>
               <a href={`#${step.id}`} className="hover:underline">{step.title}</a>
             </li>
@@ -111,34 +126,34 @@ function HandleidingPage() {
             </>
           )}
           <li><strong>SSH-toegang</strong> tot de VM{mode === "split" ? "'s" : ""}</li>
-          <li><strong>Privé GitHub repo</strong> met je Lovable project</li>
+          <li><strong>Privé GitHub repo</strong> met je Lovable project (te vinden op <a href="https://github.com" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">github.com</a>)</li>
           <li><strong>Domeinnaam</strong> (optioneel, kan ook op IP)</li>
         </ul>
         {mode === "split" && (
-          <Tip>Zorg dat beide VM's elkaar kunnen bereiken via het interne Proxmox netwerk (vmbr0).</Tip>
+          <Tip>Zorg dat beide VM's elkaar kunnen bereiken via het interne Proxmox netwerk (vmbr0). Noteer de IP-adressen van beide servers.</Tip>
         )}
       </Step>
 
       {/* Stap: Architectuur */}
       <Step id="architectuur" number={steps.findIndex(s => s.id === "architectuur") + 1} title="Architectuur">
         <Tip>
-          <strong>Wat is Supabase?</strong> Supabase is een complete backend-stack: PostgreSQL (database), GoTrue (authenticatie), PostgREST (API), Storage (bestanden) en Realtime (websockets). Al deze services draaien als Docker containers.
+          <strong>Wat is Supabase?</strong> Supabase is een complete backend-stack: PostgreSQL (database), GoTrue (authenticatie/login), PostgREST (API), Storage (bestanden) en Realtime (websockets). Al deze services draaien als Docker containers op je server.
         </Tip>
 
         {mode === "single" ? (
           <>
             <p>Alles draait op één VM:</p>
             <CodeBlock>{`[VM - 4GB RAM]
-├── Nginx (SSL termination)
+├── Nginx (SSL termination + reverse proxy)
 │   ├── /           → Node.js frontend (poort 3000)
 │   └── /auth, /rest, /storage, /realtime → Kong API Gateway (poort 8000)
 │
-├── React Frontend (Node.js, Docker)
+├── React Frontend (Node.js, Docker container)
 │
 └── Supabase stack (Docker Compose)
-    ├── Kong (API Gateway, poort 8000)
+    ├── Kong (API Gateway, poort 8000) ← valideert API keys
     ├── PostgreSQL (database)
-    ├── GoTrue (authenticatie)
+    ├── GoTrue (authenticatie/login)
     ├── PostgREST (REST API)
     ├── Storage (bestanden)
     ├── Realtime (websockets)
@@ -150,7 +165,7 @@ function HandleidingPage() {
             <CodeBlock>{`[Server A - Supabase backend - 2GB RAM]
 ├── Kong API Gateway (poort 8000) ← Frontend praat hiermee
 ├── PostgreSQL (database)
-├── GoTrue (authenticatie)
+├── GoTrue (authenticatie/login)
 ├── PostgREST (REST API)
 ├── Storage (bestanden)
 ├── Realtime (websockets)
@@ -158,7 +173,7 @@ function HandleidingPage() {
 └── Firewall: poort 8000 alleen open voor Server B
 
 [Server B - React frontend - 2GB RAM]
-├── Node.js frontend (Docker, poort 3000)
+├── Node.js frontend (Docker container, poort 3000)
 ├── Nginx (SSL + reverse proxy)
 │   ├── /           → localhost:3000 (frontend)
 │   └── /auth, /rest, /storage, /realtime → Server A:8000
@@ -169,22 +184,33 @@ function HandleidingPage() {
 
       {/* Stap: Deploy key */}
       <Step id="deploy-key" number={steps.findIndex(s => s.id === "deploy-key") + 1} title="GitHub deploy key instellen">
-        <p>Om je privé repo te clonen op de VM{mode === "split" ? "'s" : ""} zonder wachtwoord:</p>
+        <p>
+          Een <strong>deploy key</strong> is een SSH-sleutel waarmee je server je privé GitHub repo kan downloaden zonder wachtwoord. 
+          Je maakt een sleutel aan op je server en voegt het publieke deel toe aan GitHub.
+        </p>
         {mode === "split" && (
-          <Warn>Herhaal deze stap op <strong>beide servers</strong> (A en B).</Warn>
+          <Warn>Herhaal deze stap op <strong>beide servers</strong> (A en B). Elke server krijgt een eigen sleutel.</Warn>
         )}
-        <CodeBlock title="Op de VM">{`# SSH key genereren (geen wachtwoord)
+
+        <Location icon="terminal" text={`Terminal op je ${mode === "split" ? "server (herhaal voor beide)" : "VM"}`} />
+        <CodeBlock title="1. SSH key genereren">{`# Genereer een nieuwe SSH key (druk Enter bij alle vragen)
 ssh-keygen -t ed25519 -C "deploy@vps" -f ~/.ssh/deploy_key -N ""
 
-# Publieke key tonen
+# Toon de publieke key — kopieer de hele output
 cat ~/.ssh/deploy_key.pub`}</CodeBlock>
-        <p>Kopieer de output en ga naar je GitHub repo:</p>
+
+        <Location icon="browser" text="GitHub.com — je repository" />
         <ol className="list-inside list-decimal space-y-1">
-          <li>Ga naar <strong>Settings → Deploy keys → Add deploy key</strong></li>
-          <li>Plak de publieke key, geef een naam (bijv. "VPS{mode === "split" ? " - Server A" : ""}"), vink <strong>"Allow write access"</strong> niet aan</li>
+          <li>Ga naar je repo op GitHub → <strong>Settings</strong> (tandwiel-icoon)</li>
+          <li>Klik links op <strong>Deploy keys</strong> → <strong>Add deploy key</strong></li>
+          <li>Geef een naam (bijv. "VPS{mode === "split" ? " - Server A" : ""}") en plak de key die je net hebt gekopieerd</li>
+          <li>Laat <strong>"Allow write access"</strong> uitgevinkt</li>
           <li>Klik <strong>Add key</strong></li>
         </ol>
-        <CodeBlock title="SSH config aanmaken">{`cat > ~/.ssh/config << 'EOF'
+
+        <Location icon="terminal" text={`Terminal op je ${mode === "split" ? "server" : "VM"}`} />
+        <CodeBlock title="2. SSH config aanmaken">{`# Maak een SSH config zodat git de juiste key gebruikt
+cat > ~/.ssh/config << 'EOF'
 Host github.com
   IdentityFile ~/.ssh/deploy_key
   IdentitiesOnly yes
@@ -193,54 +219,63 @@ chmod 600 ~/.ssh/config
 
 # Test de verbinding
 ssh -T git@github.com`}</CodeBlock>
-        <Tip>Je zou moeten zien: "Hi user/repo! You've successfully authenticated"</Tip>
+        <Tip>Je zou moeten zien: <code className="rounded bg-muted px-1.5 py-0.5 text-xs">"Hi username! You've successfully authenticated"</code>. Het woord "username" is je GitHub-gebruikersnaam.</Tip>
       </Step>
 
       {/* === SINGLE MODE: Installatie === */}
       {mode === "single" && (
         <Step id="installatie" number={steps.findIndex(s => s.id === "installatie") + 1} title="Installatie">
+          <Location icon="terminal" text="Terminal op je VM" />
           <p>Clone je repo en draai het install-script:</p>
-          <CodeBlock>{`# Repo clonen
+          <CodeBlock>{`# Clone je repo (vervang met je eigen GitHub gebruikersnaam en repo naam)
+# Voorbeeld: git clone git@github.com:jandevries/mijn-app.git /opt/lovable-app
 git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
 
-# Installer draaien
+# Ga naar de map en start de installer
 cd /opt/lovable-app
 sudo bash install.sh`}</CodeBlock>
+          <Tip>
+            <strong>JOUW-USER</strong> = je GitHub gebruikersnaam (bijv. <code className="rounded bg-muted px-1.5 py-0.5 text-xs">jandevries</code>)<br />
+            <strong>JOUW-REPO</strong> = de naam van je repository (bijv. <code className="rounded bg-muted px-1.5 py-0.5 text-xs">mijn-app</code>)<br />
+            Je vindt dit in de URL van je repo: github.com/<strong>JOUW-USER</strong>/<strong>JOUW-REPO</strong>
+          </Tip>
           <p>Het script vraagt om:</p>
           <ul className="list-inside list-disc space-y-1">
             <li><strong>Installatiemodus</strong> — kies <code className="rounded bg-muted px-1.5 py-0.5 text-sm">1) Volledige installatie</code></li>
-            <li><strong>Domeinnaam</strong> — of laat leeg voor IP</li>
-            <li><strong>Admin e-mail</strong> — voor SSL certificaat</li>
-            <li><strong>Database wachtwoord</strong> — kies iets sterks</li>
-            <li><strong>Dashboard wachtwoord</strong> — voor Supabase Studio</li>
+            <li><strong>Domeinnaam</strong> — bijv. <code className="rounded bg-muted px-1.5 py-0.5 text-sm">mijnapp.nl</code> of laat leeg voor IP</li>
+            <li><strong>Admin e-mail</strong> — voor het SSL certificaat (Let's Encrypt)</li>
+            <li><strong>Database wachtwoord</strong> — kies iets sterks, je hebt dit later nodig</li>
+            <li><strong>Dashboard wachtwoord</strong> — voor Supabase Studio (admin paneel)</li>
           </ul>
           <p className="mt-2">Het script doet de rest: Docker installeren, secrets genereren, containers starten, Nginx + SSL configureren.</p>
-          <Warn>Het script zet <code className="rounded bg-muted px-1.5 py-0.5 text-sm">GOTRUE_MAILER_AUTOCONFIRM: true</code>. Dit bevestigt e-mailadressen automatisch zonder verificatie. Voor productie: stel SMTP in (stap {steps.findIndex(s => s.id === "smtp-oauth") + 1}) en zet dit op <code className="rounded bg-muted px-1.5 py-0.5 text-sm">false</code>.</Warn>
+          <Warn>Het script zet <code className="rounded bg-muted px-1.5 py-0.5 text-sm">GOTRUE_MAILER_AUTOCONFIRM: true</code>. Dit bevestigt e-mailadressen automatisch zonder verificatie-email. Voor productie: stel SMTP in (stap {steps.findIndex(s => s.id === "smtp-oauth") + 1}) en zet dit op <code className="rounded bg-muted px-1.5 py-0.5 text-sm">false</code>.</Warn>
         </Step>
       )}
 
       {/* === SPLIT MODE: Server A (Backend) === */}
       {mode === "split" && (
         <Step id="split-backend" number={steps.findIndex(s => s.id === "split-backend") + 1} title="Server A — Supabase backend">
-          <p>Op Server A draai je de volledige Supabase stack (PostgreSQL, Auth, API, Storage, Realtime):</p>
-          <CodeBlock>{`# Repo clonen
+          <Location icon="terminal" text="Terminal op Server A" />
+          <p>Op Server A draai je de volledige Supabase stack (database, login, API, opslag):</p>
+          <CodeBlock>{`# Clone je repo (vervang met je eigen GitHub gebruikersnaam en repo naam)
 git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
 
-# Installer draaien
+# Start de installer
 cd /opt/lovable-app
 sudo bash install.sh
 
-# Kies: 2) Alleen Supabase (backend)`}</CodeBlock>
+# Kies: 2) Alleen database (Supabase stack)`}</CodeBlock>
           <p>Het script start alle Supabase containers en Kong (API Gateway op poort 8000).</p>
 
           <h4 className="mt-4 font-semibold text-foreground">Firewall instellen</h4>
           <p>Beperk toegang tot de API Gateway zodat alleen Server B erbij kan:</p>
-          <CodeBlock>{`# Sta ALLEEN de frontend-server toe op poort 8000
-sudo ufw allow from SERVER_B_IP to any port 8000
-
-# Optioneel: directe PostgreSQL toegang (voor migraties/debugging)
-sudo ufw allow from SERVER_B_IP to any port 5432`}</CodeBlock>
-          <Tip>Noteer de <strong>Anon Key</strong> uit de output — die heb je nodig bij het installeren van Server B.</Tip>
+          <CodeBlock>{`# Vervang SERVER_B_IP met het IP-adres van je frontend-server
+# Voorbeeld: sudo ufw allow from 192.168.1.20 to any port 8000
+sudo ufw allow from SERVER_B_IP to any port 8000`}</CodeBlock>
+          <Warn>
+            <strong>Belangrijk!</strong> Noteer de <strong>Anon Key</strong> die het script aan het einde toont — 
+            die heb je nodig bij het installeren van Server B. Je vindt deze ook terug in <code className="rounded bg-muted px-1.5 py-0.5 text-xs">/opt/supabase/credentials.txt</code>.
+          </Warn>
           <Warn>Zet poort 8000 <strong>niet</strong> open voor iedereen. Beperk het tot het IP van Server B.</Warn>
         </Step>
       )}
@@ -248,18 +283,19 @@ sudo ufw allow from SERVER_B_IP to any port 5432`}</CodeBlock>
       {/* === SPLIT MODE: Server B (Frontend) === */}
       {mode === "split" && (
         <Step id="split-frontend" number={steps.findIndex(s => s.id === "split-frontend") + 1} title="Server B — React frontend">
+          <Location icon="terminal" text="Terminal op Server B" />
           <p>Op Server B draait alleen de React app — geen database, geen Supabase services:</p>
-          <CodeBlock>{`# Repo clonen
+          <CodeBlock>{`# Clone je repo
 git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
 
-# Installer draaien
+# Start de installer
 cd /opt/lovable-app
 sudo bash install.sh
 
 # Kies: 3) Alleen frontend
-# Voer het IP of domein van Server A in wanneer gevraagd
+# Voer het IP-adres van Server A in wanneer gevraagd
 # Voer de Anon Key in die je bij Server A hebt genoteerd`}</CodeBlock>
-          <p>Het script bouwt de React app als Docker container, configureert Nginx als reverse proxy (frontend + API doorsturen naar Server A) en regelt SSL.</p>
+          <p>Het script bouwt de React app als Docker container, configureert Nginx als reverse proxy en regelt SSL.</p>
         </Step>
       )}
 
@@ -267,35 +303,40 @@ sudo bash install.sh
       <Step id="na-installatie" number={steps.findIndex(s => s.id === "na-installatie") + 1} title="Na installatie">
         <p>Controleer of alles werkt:</p>
         {mode === "single" ? (
-          <CodeBlock>{`# Draaiende containers bekijken
+          <>
+            <Location icon="terminal" text="Terminal op je VM" />
+            <CodeBlock>{`# Bekijk alle draaiende containers (je zou 8+ containers moeten zien)
 docker ps
 
-# Frontend testen
+# Test of de frontend reageert
 curl -I http://localhost:3000
 
-# Supabase API testen
-curl http://localhost:8000/rest/v1/ -H "apikey: JOUW_ANON_KEY"
-
-# Open in je browser:
-# https://jouw-domein.nl        → je app
-# https://jouw-domein.nl:8080   → Supabase Studio (admin)`}</CodeBlock>
+# Test de Supabase API (vervang JOUW_ANON_KEY)
+curl http://localhost:8000/rest/v1/ -H "apikey: JOUW_ANON_KEY"`}</CodeBlock>
+            <Location icon="browser" text="Browser op je eigen computer" />
+            <CodeBlock>{`# Open deze adressen in je browser:
+https://jouw-domein.nl        → je app
+https://jouw-domein.nl:8080   → Supabase Studio (admin paneel)`}</CodeBlock>
+          </>
         ) : (
           <>
-            <CodeBlock title="Op Server A (backend)">{`# Controleer of alle Supabase containers draaien
+            <Location icon="terminal" text="Terminal op Server A (backend)" />
+            <CodeBlock>{`# Controleer of alle Supabase containers draaien
 docker ps
 
-# API testen
+# Test de API
 curl http://localhost:8000/rest/v1/ -H "apikey: JOUW_ANON_KEY"
 
-# Studio openen: http://SERVER_A_IP:8080`}</CodeBlock>
-            <CodeBlock title="Op Server B (frontend)">{`# Controleer of de frontend draait
+# Studio openen in browser: http://SERVER_A_IP:8080`}</CodeBlock>
+            <Location icon="terminal" text="Terminal op Server B (frontend)" />
+            <CodeBlock>{`# Controleer of de frontend draait
 docker ps
 curl -I http://localhost:3000
 
 # Test of de API via Nginx bereikbaar is
-curl http://localhost/rest/v1/ -H "apikey: JOUW_ANON_KEY"
-
-# Open in je browser: https://jouw-domein.nl`}</CodeBlock>
+curl http://localhost/rest/v1/ -H "apikey: JOUW_ANON_KEY"`}</CodeBlock>
+            <Location icon="browser" text="Browser op je eigen computer" />
+            <p>Open <code className="rounded bg-muted px-1.5 py-0.5 text-sm">https://jouw-domein.nl</code> — je zou je app moeten zien.</p>
           </>
         )}
       </Step>
@@ -304,7 +345,9 @@ curl http://localhost/rest/v1/ -H "apikey: JOUW_ANON_KEY"
       <Step id="updates" number={steps.findIndex(s => s.id === "updates") + 1} title="Updates draaien">
         <p>Na wijzigingen in Lovable (die automatisch naar GitHub pusht):</p>
         {mode === "single" ? (
-          <CodeBlock>{`# Eén commando:
+          <>
+            <Location icon="terminal" text="Terminal op je VM" />
+            <CodeBlock>{`# Eén commando om alles te updaten:
 lovable-update
 
 # Of handmatig:
@@ -312,14 +355,17 @@ cd /opt/lovable-app
 git pull
 docker build -t lovable-frontend -f Dockerfile .
 docker stop lovable-frontend && docker rm lovable-frontend
-docker run -d --name lovable-frontend --restart unless-stopped -p 3000:80 lovable-frontend`}</CodeBlock>
+docker run -d --name lovable-frontend --restart unless-stopped -p 3000:3000 lovable-frontend`}</CodeBlock>
+          </>
         ) : (
           <>
-            <CodeBlock title="Op Server B (frontend)">{`# Update de frontend:
+            <Location icon="terminal" text="Terminal op Server B (frontend)" />
+            <CodeBlock>{`# Update de frontend:
 lovable-update
 
 # Dit doet: git pull → docker build → restart container`}</CodeBlock>
-            <CodeBlock title="Op Server A (backend, alleen bij database-wijzigingen)">{`# Nieuwe migraties toepassen:
+            <Location icon="terminal" text="Terminal op Server A (alleen bij database-wijzigingen)" />
+            <CodeBlock>{`# Nieuwe migraties toepassen:
 cd /opt/lovable-app
 git pull
 
@@ -334,19 +380,27 @@ done`}</CodeBlock>
 
       {/* Stap: Data migratie */}
       <Step id="data-migratie" number={steps.findIndex(s => s.id === "data-migratie") + 1} title="Data migreren uit Lovable Cloud">
-        <p>Als je bestaande data hebt in Lovable Cloud:</p>
+        <p>Als je bestaande data hebt in Lovable Cloud kun je die overzetten:</p>
+
+        <Location icon="browser" text="Lovable.dev in je browser" />
         <ol className="list-inside list-decimal space-y-2">
           <li>Ga naar <strong>Lovable → Cloud → Database → Tables</strong></li>
           <li>Exporteer elke tabel als CSV</li>
-          <li>Kopieer de CSV-bestanden naar je {mode === "split" ? "backend-server (A)" : "server"}</li>
-          <li>Importeer ze:</li>
         </ol>
-        <CodeBlock>{`# Kopieer CSV naar server
+
+        <Location icon="terminal" text={`Terminal op je ${mode === "split" ? "backend-server (A)" : "server"}`} />
+        <ol className="list-inside list-decimal space-y-2" start={3}>
+          <li>Kopieer de CSV-bestanden naar je server en importeer ze:</li>
+        </ol>
+        <CodeBlock>{`# Kopieer CSV van je computer naar de server
+# (draai dit op je EIGEN computer, niet op de server)
 scp tabel.csv root@jouw-server:/tmp/
 
-# Importeer in PostgreSQL
-docker exec -i supabase-db psql -U supabase -d postgres \\
-  -c "\\COPY public.tabel_naam FROM '/tmp/tabel.csv' WITH CSV HEADER"`}</CodeBlock>
+# Importeer in PostgreSQL (draai dit op de SERVER)
+# Vervang "tabel_naam" met de naam van je tabel
+cat /tmp/tabel.csv | docker exec -i supabase-db psql -U supabase -d postgres \\
+  -c "\\COPY public.tabel_naam FROM STDIN WITH CSV HEADER"`}</CodeBlock>
+        <Tip>Het <code className="rounded bg-muted px-1.5 py-0.5 text-xs">scp</code>-commando draai je op je eigen computer (niet op de server). Het kopieert een bestand via SSH naar de server.</Tip>
         <Warn>Gebruikerswachtwoorden kunnen niet gemigreerd worden. Gebruikers moeten een wachtwoord-reset doen na migratie.</Warn>
       </Step>
 
@@ -355,10 +409,11 @@ docker exec -i supabase-db psql -U supabase -d postgres \\
         <Warn>Zonder SMTP staat e-mail autoconfirm aan — iedereen kan zich registreren zonder verificatie. Stel SMTP in voor productie!</Warn>
 
         <h4 className="font-semibold text-foreground">E-mail (SMTP)</h4>
-        <p>Bewerk de Supabase environment file{mode === "split" ? " op Server A" : ""}:</p>
+        <Location icon="terminal" text={`Terminal op je ${mode === "split" ? "backend-server (A)" : "VM"}`} />
+        <p>Bewerk de Supabase environment file:</p>
         <CodeBlock>{`sudo nano /opt/supabase/.env
 
-# Pas deze regels aan:
+# Pas deze regels aan met je eigen SMTP gegevens:
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=jouw-email@gmail.com
@@ -371,56 +426,73 @@ SMTP_SENDER_NAME=Mijn App
 
 # Herstart auth container
 cd /opt/supabase && docker compose restart auth`}</CodeBlock>
+        <Tip>Voor Gmail: gebruik een <a href="https://myaccount.google.com/apppasswords" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">App-wachtwoord</a>, niet je gewone wachtwoord. Je hebt 2FA nodig om een App-wachtwoord aan te maken.</Tip>
 
-        <h4 className="mt-6 font-semibold text-foreground">Google OAuth</h4>
+        <h4 className="mt-6 font-semibold text-foreground">Google OAuth (inloggen met Google)</h4>
+        <Location icon="browser" text="Google Cloud Console" />
         <ol className="list-inside list-decimal space-y-1">
           <li>Ga naar <a href="https://console.cloud.google.com" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">Google Cloud Console</a></li>
-          <li>Maak OAuth 2.0 credentials aan</li>
+          <li>Maak OAuth 2.0 credentials aan (APIs & Services → Credentials)</li>
           <li>Redirect URI: <code className="rounded bg-muted px-1.5 py-0.5 text-sm">https://jouw-domein.nl/auth/v1/callback</code></li>
-          <li>Voeg toe aan <code className="rounded bg-muted px-1.5 py-0.5 text-sm">/opt/supabase/.env</code>{mode === "split" ? " op Server A" : ""}:</li>
         </ol>
-        <CodeBlock>{`GOTRUE_EXTERNAL_GOOGLE_ENABLED=true
+
+        <Location icon="terminal" text={`Terminal op je ${mode === "split" ? "backend-server (A)" : "VM"}`} />
+        <ol className="list-inside list-decimal space-y-1" start={4}>
+          <li>Voeg de credentials toe aan de Supabase config:</li>
+        </ol>
+        <CodeBlock>{`sudo nano /opt/supabase/.env
+
+# Voeg deze regels toe:
+GOTRUE_EXTERNAL_GOOGLE_ENABLED=true
 GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID=jouw-client-id
 GOTRUE_EXTERNAL_GOOGLE_SECRET=jouw-secret
-GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=https://jouw-domein.nl/auth/v1/callback`}</CodeBlock>
+GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=https://jouw-domein.nl/auth/v1/callback
+
+# Herstart auth
+cd /opt/supabase && docker compose restart auth`}</CodeBlock>
       </Step>
 
       {/* Stap: Troubleshooting */}
       <Step id="troubleshooting" number={steps.findIndex(s => s.id === "troubleshooting") + 1} title="Troubleshooting">
         <div className="space-y-4">
-          <TroubleItem q="Container start niet op" a={`Check logs: docker logs supabase-db (of andere container). Vaak een verkeerd wachtwoord of poort-conflict.`} />
-          <TroubleItem q="Frontend laadt niet" a="Check of poort 3000 open is: curl http://localhost:3000. Check Nginx: sudo nginx -t" />
-          <TroubleItem q="SSL werkt niet" a="Controleer of poort 80 en 443 open staan in Proxmox firewall én UFW. Draai: sudo certbot --nginx -d jouw-domein.nl" />
-          <TroubleItem q="Database connectie mislukt" a={`Check of PostgreSQL draait: docker exec supabase-db pg_isready -U supabase.${mode === "split" ? " Bij split: check firewall op Server A." : ""}`} />
-          <TroubleItem q="Git pull mislukt" a="Check deploy key: ssh -T git@github.com. Controleer ~/.ssh/config." />
-          <TroubleItem q="Supabase API geeft 401" a="Controleer of ANON_KEY in .env.production overeenkomt met de key in /opt/supabase/.env" />
+          <TroubleItem q="Container start niet op" a={`Check logs: docker logs supabase-db (of andere containernaam). Vaak een verkeerd wachtwoord of poort-conflict.`} />
+          <TroubleItem q="Frontend laadt niet" a="Check of de container draait: docker ps. Test lokaal: curl http://localhost:3000. Check Nginx config: sudo nginx -t" />
+          <TroubleItem q="SSL werkt niet" a="Controleer of poort 80 en 443 open staan in Proxmox firewall én UFW. Draai opnieuw: sudo certbot --nginx -d jouw-domein.nl" />
+          <TroubleItem q="Database connectie mislukt" a={`Check of PostgreSQL draait: docker exec supabase-db pg_isready -U supabase.${mode === "split" ? " Bij split: check of poort 8000 open staat op Server A met: curl http://SERVER_A_IP:8000/rest/v1/" : ""}`} />
+          <TroubleItem q="Git pull mislukt" a="Check deploy key: ssh -T git@github.com. Controleer ~/.ssh/config. Zorg dat de deploy key op GitHub staat." />
+          <TroubleItem q="Supabase API geeft 401" a="Controleer of ANON_KEY in .env.production (frontend) overeenkomt met de key in /opt/supabase/.env (backend). Deze moeten exact gelijk zijn." />
           {mode === "split" && (
-            <TroubleItem q="Frontend kan Server A niet bereiken" a="Check of poort 8000 open staat op Server A: curl http://SERVER_A_IP:8000/rest/v1/. Controleer UFW regels." />
+            <TroubleItem q="Frontend kan Server A niet bereiken" a="Check firewall op Server A: sudo ufw status. Test verbinding: curl http://SERVER_A_IP:8000/rest/v1/. Poort 8000 moet open staan voor het IP van Server B." />
           )}
+          <TroubleItem q="'Permission denied' bij commando's" a="Gebruik sudo voor commando's die root-rechten nodig hebben, bijv: sudo bash install.sh" />
         </div>
       </Step>
 
       {/* Stap: Backup */}
       <Step id="backup" number={steps.findIndex(s => s.id === "backup") + 1} title="Backup">
-        <p>Maak regelmatig backups van je database{mode === "split" ? " (op Server A)" : ""}:</p>
-        <CodeBlock title="Database dump">{`# Volledige backup
-docker exec supabase-db pg_dump -U supabase postgres > backup_$(date +%Y%m%d).sql
+        <Location icon="terminal" text={`Terminal op je ${mode === "split" ? "backend-server (A)" : "VM"}`} />
+        <p>Maak regelmatig backups van je database:</p>
+        <CodeBlock title="Database dump">{`# Maak eerst de backup-map aan
+sudo mkdir -p /opt/backups
 
-# Backup met compressie
-docker exec supabase-db pg_dump -U supabase -Fc postgres > backup_$(date +%Y%m%d).dump
+# Volledige backup
+docker exec supabase-db pg_dump -U supabase postgres > /opt/backups/backup_$(date +%Y%m%d).sql
 
-# Restore
-docker exec -i supabase-db psql -U supabase -d postgres < backup_20240101.sql`}</CodeBlock>
+# Backup met compressie (kleiner bestand)
+docker exec supabase-db pg_dump -U supabase -Fc postgres > /opt/backups/backup_$(date +%Y%m%d).dump
 
-        <CodeBlock title="Automatische backup (cron)">{`# Dagelijkse backup om 3:00 's nachts
+# Restore (terugzetten)
+docker exec -i supabase-db psql -U supabase -d postgres < /opt/backups/backup_20240101.sql`}</CodeBlock>
+
+        <CodeBlock title="Automatische backup (cron)">{`# Open de cron-editor
 sudo crontab -e
 
-# Voeg toe:
-0 3 * * * docker exec supabase-db pg_dump -U supabase -Fc postgres > /opt/backups/db_$(date +\\%Y\\%m\\%d).dump 2>&1`}</CodeBlock>
+# Voeg deze regel toe (dagelijkse backup om 3:00 's nachts):
+0 3 * * * mkdir -p /opt/backups && docker exec supabase-db pg_dump -U supabase -Fc postgres > /opt/backups/db_$(date +\\%Y\\%m\\%d).dump 2>&1`}</CodeBlock>
 
-        <CodeBlock title="Storage backup">{`# Supabase Storage bestanden
-tar -czf storage_backup_$(date +%Y%m%d).tar.gz /opt/supabase/volumes/storage/`}</CodeBlock>
-        <Tip>Bewaar backups op een andere locatie — gebruik rsync naar een andere Proxmox VM of externe opslag.</Tip>
+        <CodeBlock title="Storage backup (geüploade bestanden)">{`# Supabase Storage bestanden backuppen
+tar -czf /opt/backups/storage_backup_$(date +%Y%m%d).tar.gz /opt/supabase/volumes/storage/`}</CodeBlock>
+        <Tip>Bewaar backups op een andere locatie — gebruik <code className="rounded bg-muted px-1.5 py-0.5 text-xs">rsync</code> of <code className="rounded bg-muted px-1.5 py-0.5 text-xs">scp</code> naar een andere Proxmox VM of externe opslag.</Tip>
       </Step>
 
       <footer className="mt-16 border-t border-border pt-8 pb-12 text-center text-sm text-muted-foreground">
@@ -443,6 +515,16 @@ function Step({ id, number, title, children }: { id: string; number: number; tit
       </h3>
       <div className="space-y-3 text-sm leading-relaxed text-muted-foreground">{children}</div>
     </section>
+  );
+}
+
+function Location({ icon, text }: { icon: "terminal" | "browser" | "computer"; text: string }) {
+  const IconComponent = icon === "terminal" ? Terminal : icon === "browser" ? Globe : Monitor;
+  return (
+    <div className="my-3 flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs font-medium text-foreground">
+      <IconComponent className="h-3.5 w-3.5 text-primary" />
+      <span>📍 {text}</span>
+    </div>
   );
 }
 
