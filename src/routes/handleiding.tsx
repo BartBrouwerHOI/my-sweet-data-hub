@@ -330,11 +330,15 @@ ssh -T git@github.com`}</CodeBlock>
         <Step id="installatie" number={steps.findIndex(s => s.id === "installatie") + 1} title={<>Installatie <StepBadge type="verplicht" /></>}>
           <Location icon="terminal" text="Terminal op je VM" />
           <p>Clone je repo en draai het install-script:</p>
-          <CodeBlock fill={fill}>{`# Clone je repo (vervang met je eigen GitHub gebruikersnaam en repo naam)
-# Voorbeeld: sudo git clone git@github.com:jandevries/mijn-app.git /opt/lovable-app
-sudo git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
+          <Warn>Gebruik <strong>niet</strong> <CopyCode fill={fill}>sudo git clone</CopyCode> — sudo draait als root en heeft geen toegang tot jouw SSH key. Maak eerst de map aan, dan clone je als gewone gebruiker.</Warn>
+          <CodeBlock fill={fill}>{`# Maak de map aan en geef jezelf rechten
+sudo mkdir -p /opt/lovable-app
+sudo chown $USER:$USER /opt/lovable-app
 
-# Ga naar de map en start de installer
+# Clone als huidige gebruiker (die de SSH key heeft)
+git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
+
+# Start de installer
 cd /opt/lovable-app
 sudo bash install.sh`}</CodeBlock>
           <Tip>
@@ -360,8 +364,13 @@ sudo bash install.sh`}</CodeBlock>
         <Step id="split-backend" number={steps.findIndex(s => s.id === "split-backend") + 1} title="Server A — Supabase backend">
           <Location icon="terminal" text="Terminal op Server A" />
           <p>Op Server A draai je de volledige Supabase stack (database, login, API, opslag):</p>
-          <CodeBlock fill={fill}>{`# Clone je repo (vervang met je eigen GitHub gebruikersnaam en repo naam)
-sudo git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
+          <Warn>Gebruik <strong>niet</strong> <CopyCode fill={fill}>sudo git clone</CopyCode> — sudo draait als root en heeft geen toegang tot jouw SSH key.</Warn>
+          <CodeBlock fill={fill}>{`# Maak de map aan en geef jezelf rechten
+sudo mkdir -p /opt/lovable-app
+sudo chown $USER:$USER /opt/lovable-app
+
+# Clone als huidige gebruiker
+git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
 
 # Start de installer
 cd /opt/lovable-app
@@ -395,8 +404,12 @@ sudo firewall-cmd --reload`}</CodeBlock>
         <Step id="split-frontend" number={steps.findIndex(s => s.id === "split-frontend") + 1} title="Server B — React frontend">
           <Location icon="terminal" text="Terminal op Server B" />
           <p>Op Server B draait alleen de React app — geen database, geen Supabase services:</p>
-          <CodeBlock fill={fill}>{`# Clone je repo
-sudo git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
+          <CodeBlock fill={fill}>{`# Maak de map aan en geef jezelf rechten
+sudo mkdir -p /opt/lovable-app
+sudo chown $USER:$USER /opt/lovable-app
+
+# Clone als huidige gebruiker
+git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
 
 # Start de installer
 cd /opt/lovable-app
