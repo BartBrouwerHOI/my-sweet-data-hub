@@ -342,7 +342,7 @@ cat ~/.ssh/deploy_key.pub`}</CodeBlock>
         <ol className="list-inside list-decimal space-y-1">
           <li>Ga naar je app-repo op GitHub: <CopyCode fill={fill}>APP-USER/APP-REPO</CopyCode></li>
           <li>Ga naar <strong>Settings</strong> → <strong>Deploy keys</strong> → <strong>Add deploy key</strong></li>
-          <li>Naam: <CopyCode fill={fill}>{`VPS deploy${mode === "split" ? " - Server A" : ""}`}</CopyCode> — plak de publieke key</li>
+          <li>Naam: <CopyCode fill={fill}>{`VPS deploy${mode === "split" ? " - Server B" : ""}`}</CopyCode> — plak de publieke key</li>
           <li>Laat <strong>"Allow write access"</strong> uitgevinkt</li>
         </ol>
 
@@ -437,10 +437,17 @@ git clone INFRA-REPO-URL /opt/lovable-infra`}</CodeBlock>
 git clone INFRA-REPO-URL /opt/lovable-infra
 
 # Start de installer
-sudo bash /opt/lovable-infra/install.sh
+sudo bash /opt/lovable-infra/install.sh`}</CodeBlock>
 
-# Kies: 2) Alleen database (Supabase stack)`}</CodeBlock>
-          <p>Het script start alle Supabase containers en <InfoTooltip text="API Gateway — controleert of API-verzoeken een geldige sleutel hebben voordat ze worden doorgestuurd naar de juiste service." /> (API Gateway op poort 8000).</p>
+          <p>Het script vraagt om:</p>
+          <ul className="list-inside list-disc space-y-1">
+            <li><strong>Installatiemodus</strong> — kies <CopyCode fill={fill}>2) Alleen database</CopyCode></li>
+            <li><strong>Domeinnaam</strong> — of laat leeg voor IP</li>
+            <li><strong>Admin e-mail</strong> en <strong>wachtwoorden</strong></li>
+            <li><strong>App-repo clonen voor migraties?</strong> — kies <CopyCode fill={fill}>j</CopyCode> als je app database-migraties heeft, anders <CopyCode fill={fill}>n</CopyCode></li>
+          </ul>
+
+          <p className="mt-2">Het script start alle Supabase containers en <InfoTooltip text="API Gateway — controleert of API-verzoeken een geldige sleutel hebben voordat ze worden doorgestuurd naar de juiste service." /> (API Gateway op poort 8000).</p>
 
           <h4 className="mt-4 font-semibold text-foreground"><InfoTooltip text="Bepaalt welke poorten open of dicht staan op je server — beschermt tegen ongewenste toegang van buitenaf." /> instellen</h4>
           <p>Beperk toegang tot de API Gateway zodat alleen Server B erbij kan:</p>
@@ -583,7 +590,7 @@ lovable-update
         </ol>
         <CodeBlock fill={fill}>{`# Kopieer CSV van je computer naar de server
 # (draai dit op je EIGEN computer, niet op de server)
-scp tabel.csv root@jouw-server:/tmp/
+scp tabel.csv root@JOUW-SERVER-IP:/tmp/
 
 # Importeer in PostgreSQL (draai dit op de SERVER)
 cat /tmp/tabel.csv | docker exec -i supabase-db psql -U supabase -d postgres \\
@@ -612,14 +619,15 @@ SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=jouw-email@gmail.com
 SMTP_PASS=jouw-app-wachtwoord
-SMTP_SENDER_NAME=Mijn App
+SMTP_SENDER_NAME=Mijn App`}</CodeBlock>
 
-# Zet autoconfirm UIT:
-# In docker-compose.yml → auth service:
-# GOTRUE_MAILER_AUTOCONFIRM: "false"
+          <p>Zet autoconfirm uit in de docker-compose:</p>
+          <CodeBlock fill={fill}>{`# In docker-compose.yml → auth service → environment:
+# Verander GOTRUE_MAILER_AUTOCONFIRM van "true" naar "false"
+sudo nano /opt/supabase/docker-compose.yml`}</CodeBlock>
 
-# Herstart auth container
-cd /opt/supabase && docker compose restart auth`}</CodeBlock>
+          <p>Herstart de auth container:</p>
+          <CodeBlock fill={fill}>{`cd /opt/supabase && docker compose restart auth`}</CodeBlock>
           <Tip>Voor Gmail: gebruik een <a href="https://myaccount.google.com/apppasswords" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">App-wachtwoord</a>, niet je gewone wachtwoord. Je hebt 2FA nodig om een App-wachtwoord aan te maken.</Tip>
         </div>
 
