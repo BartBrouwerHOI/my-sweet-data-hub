@@ -23,8 +23,10 @@ function HandleidingPage() {
 
   // User config fields with localStorage persistence
   const [userConfig, setUserConfig] = useState({
-    githubUser: "",
-    repoName: "",
+    infraUser: "",
+    infraRepo: "",
+    appUser: "",
+    appRepo: "",
     serverIp: "",
     domain: "",
     serverAIp: "",
@@ -47,8 +49,10 @@ function HandleidingPage() {
 
   const fill = useCallback((text: string): string => {
     let result = text;
-    if (userConfig.githubUser) result = result.replace(/JOUW-USER/g, userConfig.githubUser);
-    if (userConfig.repoName) result = result.replace(/JOUW-REPO/g, userConfig.repoName);
+    if (userConfig.infraUser) result = result.replace(/INFRA-USER/g, userConfig.infraUser);
+    if (userConfig.infraRepo) result = result.replace(/INFRA-REPO/g, userConfig.infraRepo);
+    if (userConfig.appUser) result = result.replace(/APP-USER/g, userConfig.appUser);
+    if (userConfig.appRepo) result = result.replace(/APP-REPO/g, userConfig.appRepo);
     if (userConfig.serverIp) result = result.replace(/JOUW-SERVER-IP/g, userConfig.serverIp);
     if (userConfig.domain) result = result.replace(/jouw-domein\.nl/g, userConfig.domain);
     if (userConfig.serverAIp) result = result.replace(/SERVER_A_IP/g, userConfig.serverAIp);
@@ -180,9 +184,21 @@ function HandleidingPage() {
         <p className="mb-4 text-xs text-muted-foreground">
           Vul je gegevens in — alle commando's in de handleiding worden automatisch aangepast zodat je ze direct kunt kopiëren en plakken.
         </p>
+
+        <p className="mb-2 text-xs font-semibold text-foreground uppercase tracking-wide">🔧 Infra-repo <span className="font-normal text-muted-foreground">(dit project — installer, Dockerfiles, Supabase stack)</span></p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 mb-4">
+          <ConfigInput label="GitHub gebruiker (infra)" placeholder="INFRA-USER" value={userConfig.infraUser} onChange={v => updateField("infraUser", v)} />
+          <ConfigInput label="Repository naam (infra)" placeholder="INFRA-REPO" value={userConfig.infraRepo} onChange={v => updateField("infraRepo", v)} />
+        </div>
+
+        <p className="mb-2 text-xs font-semibold text-foreground uppercase tracking-wide">📦 App-repo <span className="font-normal text-muted-foreground">(jouw Lovable project dat je wilt deployen)</span></p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 mb-4">
+          <ConfigInput label="GitHub gebruiker (app)" placeholder="APP-USER" value={userConfig.appUser} onChange={v => updateField("appUser", v)} />
+          <ConfigInput label="Repository naam (app)" placeholder="APP-REPO" value={userConfig.appRepo} onChange={v => updateField("appRepo", v)} />
+        </div>
+
+        <p className="mb-2 text-xs font-semibold text-foreground uppercase tracking-wide">🖥️ Server</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <ConfigInput label="GitHub gebruikersnaam" placeholder="JOUW-USER" value={userConfig.githubUser} onChange={v => updateField("githubUser", v)} />
-          <ConfigInput label="Repository naam" placeholder="JOUW-REPO" value={userConfig.repoName} onChange={v => updateField("repoName", v)} />
           <ConfigInput label="Server IP" placeholder="JOUW-SERVER-IP" value={userConfig.serverIp} onChange={v => updateField("serverIp", v)} />
           <ConfigInput label="Domeinnaam" placeholder="jouw-domein.nl" value={userConfig.domain} onChange={v => updateField("domain", v)} />
           {mode === "split" && (
@@ -291,8 +307,8 @@ function HandleidingPage() {
       {/* Stap: Deploy key */}
       <Step id="deploy-key" number={steps.findIndex(s => s.id === "deploy-key") + 1} title={<>GitHub <InfoTooltip text="Een SSH-sleutel die alleen leesrechten heeft op één specifieke GitHub repo. Hiermee kan je server de code downloaden zonder wachtwoord." /> instellen <StepBadge type="verplicht" /></>}>
         <p>
-          Een <strong>deploy key</strong> is een <InfoTooltip text="Veilige verbinding met je server op afstand, zoals remote desktop maar dan via tekst." />-sleutel waarmee je server je privé GitHub repo kan downloaden zonder wachtwoord. 
-          Je maakt een sleutel aan op je server en voegt het publieke deel toe aan GitHub.
+          Een <strong>deploy key</strong> is een <InfoTooltip text="Veilige verbinding met je server op afstand, zoals remote desktop maar dan via tekst." />-sleutel waarmee je server je privé GitHub repo's kan downloaden zonder wachtwoord. 
+          Je maakt één sleutel aan op je server en voegt het publieke deel toe aan <strong>beide</strong> GitHub repo's (infra + app).
         </p>
         {mode === "split" && (
           <Warn>Herhaal deze stap op <strong>beide servers</strong> (A en B). Elke server krijgt een eigen sleutel.</Warn>
@@ -308,17 +324,43 @@ chmod 600 ~/.ssh/deploy_key
 # Toon de publieke key — kopieer de hele output
 cat ~/.ssh/deploy_key.pub`}</CodeBlock>
 
-        <Location icon="browser" text="GitHub.com — je repository" />
+        <Location icon="browser" text="GitHub.com — BEIDE repo's" />
+        <Warn>
+          <strong>Let op:</strong> Je hebt <strong>twee</strong> repo's die de server moet kunnen benaderen:
+          <ul className="mt-1 ml-4 list-disc space-y-0.5">
+            <li><strong>Infra-repo</strong> — <CopyCode fill={fill}>INFRA-USER/INFRA-REPO</CopyCode> (dit project)</li>
+            <li><strong>App-repo</strong> — <CopyCode fill={fill}>APP-USER/APP-REPO</CopyCode> (jouw Lovable project)</li>
+          </ul>
+          Voeg dezelfde publieke key toe aan <strong>beide</strong> repo's. GitHub staat dezelfde deploy key niet toe op twee repo's — 
+          gebruik dan een <a href="https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys#machine-users" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">machine user</a> of 
+          een <a href="https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">Personal Access Token (PAT)</a>.
+        </Warn>
+
+        <p className="font-medium">Optie A: Deploy keys (als beide repo's van dezelfde eigenaar zijn)</p>
         <ol className="list-inside list-decimal space-y-1">
-          <li>Ga naar je repo op GitHub → <strong>Settings</strong> (tandwiel-icoon)</li>
-          <li>Klik links op <strong>Deploy keys</strong> → <strong>Add deploy key</strong></li>
-          <li>Geef een naam (bijv. "VPS{mode === "split" ? " - Server A" : ""}") en plak de key die je net hebt gekopieerd</li>
-          <li>Laat <strong>"Allow write access"</strong> uitgevinkt</li>
-          <li>Klik <strong>Add key</strong></li>
+          <li>Ga naar <strong>Infra-repo</strong> op GitHub → <strong>Settings</strong> → <strong>Deploy keys</strong> → <strong>Add deploy key</strong></li>
+          <li>Naam: "VPS infra{mode === "split" ? " - Server A" : ""}" — plak de publieke key</li>
+          <li>Herhaal voor de <strong>App-repo</strong> met naam "VPS app{mode === "split" ? " - Server A" : ""}"</li>
+          <li>Laat <strong>"Allow write access"</strong> uitgevinkt bij beide</li>
+        </ol>
+        <Tip>
+          <strong>Tip:</strong> Als GitHub de key weigert omdat hij al op de andere repo staat, genereer dan een tweede key:
+          <CodeBlock fill={fill}>{`ssh-keygen -t ed25519 -C "deploy-app@vps" -f ~/.ssh/deploy_key_app -N ""`}</CodeBlock>
+          En pas de SSH config aan (zie hieronder) om per host de juiste key te gebruiken.
+        </Tip>
+
+        <p className="mt-3 font-medium">Optie B: Personal Access Token (makkelijkst bij meerdere repo's)</p>
+        <ol className="list-inside list-decimal space-y-1">
+          <li>Ga naar <a href="https://github.com/settings/tokens?type=beta" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">GitHub → Settings → Developer settings → Fine-grained tokens</a></li>
+          <li>Maak een token met <strong>Contents: Read-only</strong> toegang tot beide repo's</li>
+          <li>Clone dan met HTTPS in plaats van SSH:
+            <CodeBlock fill={fill}>{`git clone https://github.com/INFRA-USER/INFRA-REPO.git /opt/lovable-infra
+git clone https://github.com/APP-USER/APP-REPO.git /opt/lovable-app`}</CodeBlock>
+          </li>
         </ol>
 
         <Location icon="terminal" text={`Terminal op je ${mode === "split" ? "server" : "VM"}`} />
-        <CodeBlock fill={fill} title="2. SSH config aanmaken">{`# Maak een SSH config zodat git de juiste key gebruikt
+        <CodeBlock fill={fill} title="2. SSH config aanmaken (bij deploy keys)">{`# Maak een SSH config zodat git de juiste key gebruikt
 cat > ~/.ssh/config << 'EOF'
 Host github.com
   IdentityFile ~/.ssh/deploy_key
@@ -350,17 +392,22 @@ ssh -T -i ~/.ssh/deploy_key git@github.com`}</CodeBlock>
               <tr className="border-t border-border">
                 <td className="px-3 py-2 font-mono text-xs">"Hi USERNAME! You've successfully authenticated"</td>
                 <td className="px-3 py-2 text-green-600 dark:text-green-400">✅ Alles werkt</td>
-                <td className="px-3 py-2">Ga door naar de clone stap</td>
+                <td className="px-3 py-2">Ga door naar de installatie stap</td>
               </tr>
               <tr className="border-t border-border">
                 <td className="px-3 py-2 font-mono text-xs">"Repository not found"</td>
                 <td className="px-3 py-2">SSH werkt, maar de key heeft geen toegang tot deze repo</td>
-                <td className="px-3 py-2">Controleer of de deploy key aan de <strong>juiste repo</strong> is toegevoegd op GitHub</td>
+                <td className="px-3 py-2">Controleer of de deploy key aan <strong>beide</strong> repo's is toegevoegd</td>
               </tr>
               <tr className="border-t border-border">
                 <td className="px-3 py-2 font-mono text-xs">"Permission denied (publickey)"</td>
                 <td className="px-3 py-2">SSH kan helemaal niet authenticeren</td>
                 <td className="px-3 py-2">De key wordt niet gevonden — controleer <CopyCode fill={fill}>~/.ssh/config</CopyCode> en <CopyCode fill={fill}>chmod 600</CopyCode></td>
+              </tr>
+              <tr className="border-t border-border">
+                <td className="px-3 py-2 font-mono text-xs">"Key is already in use"</td>
+                <td className="px-3 py-2">GitHub staat dezelfde deploy key niet toe op twee repo's</td>
+                <td className="px-3 py-2">Genereer een tweede key of gebruik een Personal Access Token (optie B hierboven)</td>
               </tr>
             </tbody>
           </table>
@@ -377,14 +424,14 @@ ssh -T -i ~/.ssh/deploy_key git@github.com`}</CodeBlock>
             Je app-code wordt apart gecloned. Zo kun je dezelfde infra gebruiken voor elk Lovable-project.
           </Tip>
 
-          <p><strong>Stap 1:</strong> Clone de <strong>infra-repo</strong> (dit project):</p>
+          <p><strong>Stap 1:</strong> Clone de <strong>infra-repo</strong> (dit project — installer, Dockerfiles, Supabase stack):</p>
           <Warn>Gebruik <strong>niet</strong> <CopyCode fill={fill}>sudo git clone</CopyCode> — sudo draait als root en heeft geen toegang tot jouw SSH key.</Warn>
           <CodeBlock fill={fill}>{`# Maak de map aan en geef jezelf rechten
 sudo mkdir -p /opt/lovable-infra
 sudo chown $USER:$USER /opt/lovable-infra
 
-# Clone de infra-repo (dit project met installer + Supabase stack)
-git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-infra`}</CodeBlock>
+# Clone de INFRA-repo (dit project met installer + Supabase stack)
+git clone git@github.com:INFRA-USER/INFRA-REPO.git /opt/lovable-infra`}</CodeBlock>
 
           <p><strong>Stap 2:</strong> Start de installer:</p>
           <CodeBlock fill={fill}>{`# Start de installer
@@ -397,7 +444,7 @@ sudo bash /opt/lovable-infra/install.sh`}</CodeBlock>
             <li><strong>Admin e-mail</strong> — voor het <InfoTooltip text="Versleutelde verbinding (https) zodat data veilig verstuurd wordt. Let's Encrypt geeft gratis SSL-certificaten uit." /> certificaat</li>
             <li><strong>Database wachtwoord</strong> — kies iets sterks, je hebt dit later nodig</li>
             <li><strong>Dashboard wachtwoord</strong> — voor Supabase Studio (admin paneel)</li>
-            <li><strong>GitHub repo URL</strong> — de SSH URL van je <strong>app-project</strong> (niet de infra-repo!)</li>
+            <li><strong>GitHub repo URL</strong> — de SSH URL van je <strong>app-project</strong>: <CopyCode fill={fill}>git@github.com:APP-USER/APP-REPO.git</CopyCode></li>
           </ul>
 
           <Tip>
@@ -420,8 +467,8 @@ sudo bash /opt/lovable-infra/install.sh`}</CodeBlock>
 sudo mkdir -p /opt/lovable-infra
 sudo chown $USER:$USER /opt/lovable-infra
 
-# Clone de infra-repo (dit project)
-git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-infra
+# Clone de INFRA-repo (dit project)
+git clone git@github.com:INFRA-USER/INFRA-REPO.git /opt/lovable-infra
 
 # Start de installer
 sudo bash /opt/lovable-infra/install.sh
@@ -458,13 +505,14 @@ sudo firewall-cmd --reload`}</CodeBlock>
 sudo mkdir -p /opt/lovable-infra
 sudo chown $USER:$USER /opt/lovable-infra
 
-# Clone de infra-repo (dit project)
-git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-infra
+# Clone de INFRA-repo (dit project)
+git clone git@github.com:INFRA-USER/INFRA-REPO.git /opt/lovable-infra
 
 # Start de installer
 sudo bash /opt/lovable-infra/install.sh
 
 # Kies: 3) Alleen frontend
+# Voer de SSH URL van je APP-repo in: git@github.com:APP-USER/APP-REPO.git
 # Voer het IP-adres van Server A in wanneer gevraagd
 # Voer de Anon Key in die je bij Server A hebt genoteerd`}</CodeBlock>
           <p>Het script bouwt de React app als <InfoTooltip text="Software die in een afgesloten 'doos' draait, zodat het overal hetzelfde werkt." />, configureert <InfoTooltip text="Webserver die bezoekers doorstuurt naar de juiste service (reverse proxy)." /> als reverse proxy en regelt SSL.</p>
