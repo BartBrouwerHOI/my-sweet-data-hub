@@ -294,7 +294,7 @@ sudo bash install.sh`}</CodeBlock>
             <li><strong>Database wachtwoord</strong> — kies iets sterks, je hebt dit later nodig</li>
             <li><strong>Dashboard wachtwoord</strong> — voor Supabase Studio (admin paneel)</li>
           </ul>
-          <p className="mt-2">Het script doet de rest: <InfoTooltip text="Software die in een afgesloten 'doos' draait, zodat het overal hetzelfde werkt — ongeacht het besturingssysteem." /> installeren, secrets genereren, containers starten, <InfoTooltip text="Webserver die bezoekers doorstuurt naar de juiste service (reverse proxy)." /> + SSL configureren.</p>
+          <p className="mt-2">Het script doet de rest: het detecteert automatisch of je {distro === "debian" ? "Ubuntu/Debian" : "CentOS/AlmaLinux/Rocky"} draait en installeert de juiste packages ({distro === "debian" ? "apt" : "dnf"}), <InfoTooltip text="Software die in een afgesloten 'doos' draait, zodat het overal hetzelfde werkt — ongeacht het besturingssysteem." />, secrets genereren, containers starten, <InfoTooltip text="Webserver die bezoekers doorstuurt naar de juiste service (reverse proxy)." /> + SSL en firewall ({distro === "debian" ? "UFW" : "firewalld"}).</p>
           <Warn>Het script zet <code className="rounded bg-muted px-1.5 py-0.5 text-sm">GOTRUE_MAILER_AUTOCONFIRM: true</code>. Dit bevestigt e-mailadressen automatisch zonder verificatie-email. Voor productie: stel <InfoTooltip text="Protocol voor het versturen van e-mails — nodig voor verificatie-mails en wachtwoord-reset." /> in (stap {steps.findIndex(s => s.id === "smtp-oauth") + 1}) en zet dit op <code className="rounded bg-muted px-1.5 py-0.5 text-sm">false</code>.</Warn>
         </Step>
       )}
