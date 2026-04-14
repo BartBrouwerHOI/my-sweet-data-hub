@@ -480,12 +480,14 @@ sudo firewall-cmd --reload`}</CodeBlock>
 git clone INFRA-REPO-URL /opt/lovable-infra
 
 # Start de installer
-sudo bash /opt/lovable-infra/install.sh
-
-# Kies: 3) Alleen frontend
-# Voer de SSH URL van je APP-repo in: git@github.com:APP-USER/APP-REPO.git
-# Voer het IP-adres van Server A in wanneer gevraagd
-# Voer de Anon Key in die je bij Server A hebt genoteerd`}</CodeBlock>
+sudo bash /opt/lovable-infra/install.sh`}</CodeBlock>
+          <p>Het script stelt de volgende vragen:</p>
+          <ul className="list-disc pl-6 space-y-1">
+            <li>Installatiemodus → kies <strong>3) Alleen frontend</strong></li>
+            <li>SSH URL van je APP-repo → <code>git@github.com:APP-USER/APP-REPO.git</code></li>
+            <li>IP-adres van Server A → het IP waar je database draait</li>
+            <li>Anon Key → kopieer deze uit de output van Server A</li>
+          </ul>
           <p>Het script bouwt de React app als <InfoTooltip text="Software die in een afgesloten 'doos' draait, zodat het overal hetzelfde werkt." />, configureert <InfoTooltip text="Webserver die bezoekers doorstuurt naar de juiste service (reverse proxy)." /> als reverse proxy en regelt SSL.</p>
         </Step>
       )}
