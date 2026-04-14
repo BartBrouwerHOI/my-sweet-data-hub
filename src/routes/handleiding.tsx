@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useCallback } from "react";
-import { Copy, Check, Terminal, Globe, Monitor, Info, Settings } from "lucide-react";
+import { Copy, Check, Terminal, Globe, Monitor, Info, Settings, ChevronDown } from "lucide-react";
 
 export const Route = createFileRoute("/handleiding")({
   head: () => ({
@@ -382,14 +382,7 @@ cd /opt/lovable-app
 
 # Controleer of install.sh aanwezig is
 ls install.sh`}</CodeBlock>
-          <Warn>
-            <strong>install.sh niet gevonden?</strong> Dan is het bestand waarschijnlijk niet mee-gepusht naar GitHub. Controleer in je GitHub repo of <CopyCode fill={fill}>install.sh</CopyCode> in de root staat. Zo niet:
-            <ul className="list-inside list-disc mt-1 space-y-1">
-              <li>Ga naar Lovable → Connectors → GitHub en controleer of de sync actief is</li>
-              <li>Of download handmatig (let op: vervang <CopyCode fill={fill}>JOUW-BRANCH</CopyCode> door <CopyCode fill={fill}>main</CopyCode> of <CopyCode fill={fill}>master</CopyCode>, afhankelijk van je repo): <CopyCode fill={fill}>{`curl -O https://raw.githubusercontent.com/JOUW-USER/JOUW-REPO/JOUW-BRANCH/install.sh`}</CopyCode></li>
-            </ul>
-            Als het bestand er wél is, start de installer: <CopyCode fill={fill}>sudo bash install.sh</CopyCode>
-          </Warn>
+          <InstallShMissing fill={fill} />
           <Tip>
             <strong>JOUW-USER</strong> = je GitHub gebruikersnaam (bijv. <CopyCode fill={fill}>jandevries</CopyCode>)<br />
             <strong>JOUW-REPO</strong> = de naam van je repository (bijv. <CopyCode fill={fill}>mijn-app</CopyCode>)<br />
@@ -431,10 +424,7 @@ ls install.sh
 sudo bash install.sh
 
 # Kies: 2) Alleen database (Supabase stack)`}</CodeBlock>
-          <Warn>
-            <strong>install.sh niet gevonden?</strong> Controleer op GitHub of het bestand in de root van je repo staat én welke branch je gebruikt (<CopyCode fill={fill}>main</CopyCode> of <CopyCode fill={fill}>master</CopyCode>). Pas de URL hieronder aan:
-            <br /><CopyCode fill={fill}>{`curl -O https://raw.githubusercontent.com/JOUW-USER/JOUW-REPO/JOUW-BRANCH/install.sh`}</CopyCode>
-          </Warn>
+          <InstallShMissing fill={fill} />
           <p>Het script start alle Supabase containers en <InfoTooltip text="API Gateway — controleert of API-verzoeken een geldige sleutel hebben voordat ze worden doorgestuurd naar de juiste service." /> (API Gateway op poort 8000).</p>
 
           <h4 className="mt-4 font-semibold text-foreground"><InfoTooltip text="Bepaalt welke poorten open of dicht staan op je server — beschermt tegen ongewenste toegang van buitenaf." /> instellen</h4>
@@ -481,10 +471,7 @@ sudo bash install.sh
 # Kies: 3) Alleen frontend
 # Voer het IP-adres van Server A in wanneer gevraagd
 # Voer de Anon Key in die je bij Server A hebt genoteerd`}</CodeBlock>
-          <Warn>
-            <strong>install.sh niet gevonden?</strong> Controleer op GitHub of het bestand in de root van je repo staat én welke branch je gebruikt (<CopyCode fill={fill}>main</CopyCode> of <CopyCode fill={fill}>master</CopyCode>). Pas de URL hieronder aan:
-            <br /><CopyCode fill={fill}>{`curl -O https://raw.githubusercontent.com/JOUW-USER/JOUW-REPO/JOUW-BRANCH/install.sh`}</CopyCode>
-          </Warn>
+          <InstallShMissing fill={fill} />
           <p>Het script bouwt de React app als <InfoTooltip text="Software die in een afgesloten 'doos' draait, zodat het overal hetzelfde werkt." />, configureert <InfoTooltip text="Webserver die bezoekers doorstuurt naar de juiste service (reverse proxy)." /> als reverse proxy en regelt SSL.</p>
         </Step>
       )}
