@@ -689,10 +689,36 @@ cd /opt/supabase && sudo docker compose restart auth`}</CodeBlock>
           <TroubleItem q="'bash: install.sh: No such file or directory'" a="Je staat niet in de juiste map, of de map is verwijderd. Gebruik altijd het volledige pad: sudo bash /opt/lovable-infra/install.sh" />
           <TroubleItem q="SSH werkt als gebruiker maar niet met sudo" a="sudo draait als root en gebruikt /root/.ssh/. Kopieer je key: sudo cp ~/.ssh/deploy_key /root/.ssh/deploy_key && sudo cp ~/.ssh/config /root/.ssh/config. Test daarna: sudo ssh -T git@github.com" />
           <TroubleItem q="Auth/Storage/Realtime containers crashen (schema 'auth' does not exist / role 'anon' does not exist)" a="De database mist de Supabase rollen en schema's. Dit gebeurt als de data directory al bestond bij eerste start. Oplossing: stop alles, verwijder de data directory en start opnieuw:" />
-          <CodeBlock fill={fill} title="Database resetten">{`cd /opt/supabase && sudo docker compose down
+          <CodeBlock fill={fill} title="Database resetten (volledige reset)">{`cd /opt/supabase && sudo docker compose down
 sudo rm -rf /opt/supabase/volumes/db/data
 sudo docker compose up -d`}</CodeBlock>
           <p className="mt-2 text-sm text-muted-foreground">⚠️ Dit wist alle database-data. Maak eerst een backup als je data wilt behouden.</p>
+
+          <TroubleItem q="Init script handmatig draaien (zonder data te wissen)" a="Als de rollen ontbreken maar je data wilt behouden, kun je het init script handmatig uitvoeren. Gebruik altijd -h localhost om via TCP te verbinden (peer auth werkt niet):" />
+          <CodeBlock fill={fill} title="Init script handmatig uitvoeren">{`# Controleer welke rollen bestaan
+sudo docker exec supabase-db bash -c 'PGPASSWORD=$POSTGRES_PASSWORD psql -U supabase -d postgres -h localhost -c "SELECT rolname FROM pg_roles WHERE rolname IN ('"'"'anon'"'"','"'"'authenticated'"'"','"'"'authenticator'"'"','"'"'service_role'"'"') ORDER BY rolname;"'
+
+# Draai het init script handmatig
+sudo docker exec -i supabase-db bash -c 'PGPASSWORD=$POSTGRES_PASSWORD psql -U supabase -d postgres -h localhost' < /opt/supabase/volumes/db/init/00-supabase-init.sql
+
+# Herstart alle services
+cd /opt/supabase && sudo docker compose restart`}</CodeBlock>
+
+          <TroubleItem q="'Peer authentication failed for user supabase'" a="Je gebruikt psql zonder -h localhost. Voeg altijd -h localhost toe om via TCP (password auth) te verbinden in plaats van Unix sockets (peer auth). Gebruik ook PGPASSWORD:" />
+          <CodeBlock fill={fill} title="Correct psql commando">{`# Fout:
+sudo docker exec supabase-db psql -U supabase -d postgres -c "..."
+
+# Goed:
+sudo docker exec supabase-db bash -c 'PGPASSWORD=$POSTGRES_PASSWORD psql -U supabase -d postgres -h localhost -c "..."'`}</CodeBlock>
+
+          <TroubleItem q="'ERROR: role supabase_admin does not exist' bij init script" a="Dit komt doordat de supabase user niet genoeg rechten heeft voor REPLICATION/BYPASSRLS. Update je infra-repo (git pull) voor de gefixte versie van het init script, of maak de rol handmatig aan:" />
+          <CodeBlock fill={fill} title="supabase_admin handmatig aanmaken">{`sudo docker exec -i supabase-db bash -c 'PGPASSWORD=$POSTGRES_PASSWORD psql -U supabase -d postgres -h localhost' <<'SQL'
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'supabase_admin') THEN
+    CREATE ROLE supabase_admin LOGIN CREATEROLE CREATEDB;
+  END IF;
+END $$;
+SQL`}</CodeBlock>
         </div>
       </Step>
 

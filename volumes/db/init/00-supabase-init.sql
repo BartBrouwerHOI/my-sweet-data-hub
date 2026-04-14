@@ -3,6 +3,10 @@
 -- =============================================================
 -- Dit script draait bij eerste database-initialisatie (lege data dir).
 -- Alle statements zijn idempotent (IF NOT EXISTS / DO $$ ... END $$).
+--
+-- BELANGRIJK: Het wachtwoord 'CHANGEME' wordt door install.sh vervangen
+-- door het werkelijke POSTGRES_PASSWORD vóór dit script naar
+-- /opt/supabase/volumes/db/init/ wordt gekopieerd.
 -- =============================================================
 
 -- =====================
@@ -12,16 +16,22 @@ CREATE SCHEMA IF NOT EXISTS extensions;
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA extensions;
 CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
-CREATE EXTENSION IF NOT EXISTS pgjwt WITH SCHEMA extensions;
+
+-- pgjwt is niet altijd beschikbaar in de image — skip als het niet bestaat
+DO $$ BEGIN
+  CREATE EXTENSION IF NOT EXISTS pgjwt WITH SCHEMA extensions;
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'pgjwt extension niet beschikbaar — overgeslagen (niet kritiek)';
+END $$;
 
 -- =====================
 -- 2. ROLLEN
 -- =====================
 
--- Supabase admin (superuser-achtig)
+-- Supabase admin (zonder REPLICATION/BYPASSRLS — die vereisen superuser)
 DO $$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'supabase_admin') THEN
-    CREATE ROLE supabase_admin LOGIN CREATEROLE CREATEDB REPLICATION BYPASSRLS;
+    CREATE ROLE supabase_admin LOGIN CREATEROLE CREATEDB;
   END IF;
 END $$;
 
@@ -47,23 +57,30 @@ DO $$ BEGIN
 END $$;
 
 -- Authenticator (PostgREST login role, wisselt naar anon/authenticated/service_role)
+-- Wachtwoord 'CHANGEME' wordt door install.sh vervangen door POSTGRES_PASSWORD
 DO $$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'authenticator') THEN
-    CREATE ROLE authenticator NOINHERIT LOGIN;
+    CREATE ROLE authenticator NOINHERIT LOGIN PASSWORD 'CHANGEME';
+  ELSE
+    ALTER ROLE authenticator WITH PASSWORD 'CHANGEME';
   END IF;
 END $$;
 
--- Auth admin (GoTrue migraties en tabellen)
+-- Auth admin (GoTrue migraties en tabellen) — LOGIN nodig voor GoTrue connectie
 DO $$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'supabase_auth_admin') THEN
-    CREATE ROLE supabase_auth_admin NOLOGIN NOINHERIT CREATEROLE;
+    CREATE ROLE supabase_auth_admin LOGIN NOINHERIT CREATEROLE PASSWORD 'CHANGEME';
+  ELSE
+    ALTER ROLE supabase_auth_admin WITH LOGIN PASSWORD 'CHANGEME';
   END IF;
 END $$;
 
--- Storage admin
+-- Storage admin — LOGIN nodig voor storage-api connectie
 DO $$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'supabase_storage_admin') THEN
-    CREATE ROLE supabase_storage_admin NOLOGIN NOINHERIT;
+    CREATE ROLE supabase_storage_admin LOGIN NOINHERIT PASSWORD 'CHANGEME';
+  ELSE
+    ALTER ROLE supabase_storage_admin WITH LOGIN PASSWORD 'CHANGEME';
   END IF;
 END $$;
 
@@ -97,16 +114,6 @@ GRANT authenticated TO supabase_admin;
 GRANT service_role TO supabase_admin;
 GRANT supabase_auth_admin TO supabase_admin;
 GRANT supabase_storage_admin TO supabase_admin;
-
--- Authenticator wachtwoord gelijkstellen aan het DB wachtwoord
--- (PostgREST logt in als authenticator)
-DO $$ BEGIN
-  EXECUTE format('ALTER ROLE authenticator WITH PASSWORD %L', current_setting('password.superuser', true));
-EXCEPTION WHEN OTHERS THEN
-  -- Als de setting niet bestaat, stel een standaard wachtwoord in
-  -- Dit wordt overschreven door install.sh
-  NULL;
-END $$;
 
 -- =====================
 -- 4. SCHEMA'S
