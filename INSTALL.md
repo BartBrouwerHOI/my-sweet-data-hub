@@ -28,7 +28,7 @@ Het script detecteert automatisch of je app een **SPA** (Vite + React) of **SSR*
 
 ```bash
 # 1. Clone de infra-repo (publiek, geen key nodig)
-git clone https://github.com/JOUW-USER/JOUW-INFRA-REPO.git /opt/lovable-infra
+git clone INFRA-REPO-URL /opt/lovable-infra
 
 # 2. Start de installer (vraagt om de SSH URL van je APP-repo)
 sudo bash /opt/lovable-infra/install.sh
@@ -36,10 +36,10 @@ sudo bash /opt/lovable-infra/install.sh
 
 Het script vraagt om:
 - **Installatiemodus** — full / database / frontend
-- **GitHub repo URL** — SSH URL van je **app-project** (privé)
 - **Domeinnaam** — of laat leeg voor IP
 - **Admin e-mail** — voor SSL certificaten
 - **Database + Dashboard wachtwoord**
+- **GitHub repo URL** — SSH URL van je **app-project** (privé)
 
 > **Tip:** De infra-repo is publiek — je hebt alleen een deploy key nodig voor je privé app-repo.
 

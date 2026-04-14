@@ -328,7 +328,7 @@ function HandleidingPage() {
           </Warn>
         )}
 
-        <Location icon="terminal" text={`Terminal op je ${mode === "split" ? "server (herhaal voor beide)" : "VM"}`} />
+        <Location icon="terminal" text={`Terminal op je ${mode === "split" ? "server" : "VM"}`} />
         <CodeBlock fill={fill} title="1. SSH key genereren">{`# Genereer een nieuwe SSH key (druk Enter bij alle vragen)
 ssh-keygen -t ed25519 -C "deploy@vps" -f ~/.ssh/deploy_key -N ""
 
@@ -560,7 +560,7 @@ lovable-update
 lovable-update
 
 # Dit doet: git pull (infra + app) → nieuwe migraties draaien → Supabase herstarten`}</CodeBlock>
-            <Tip>Bij de eerste installatie van Server A wordt de app-repo automatisch gecloned (alleen voor migraties). Je hoeft dit niet handmatig te doen.</Tip>
+            <Tip>Als je bij de installatie van Server A hebt gekozen om de app-repo te clonen voor migraties, wordt deze automatisch mee-geüpdatet door <CopyCode fill={fill}>lovable-update</CopyCode>.</Tip>
           </>
         )}
         <Tip>De Supabase containers en database blijven intact bij een update — alleen de frontend wordt opnieuw gebouwd.</Tip>

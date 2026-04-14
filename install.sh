@@ -852,7 +852,7 @@ print_summary() {
 
   echo ""
   echo -e "  📂 Infra:   ${BLUE}$INFRA_DIR${NC}"
-  if [[ "$INSTALL_MODE" != "database" ]]; then
+  if [[ -d "$APP_DIR/.git" ]]; then
     echo -e "  📂 App:     ${BLUE}$APP_DIR${NC}"
   fi
   echo -e "  🔄 Updates: ${BLUE}lovable-update${NC}"
@@ -899,6 +899,10 @@ main() {
   setup_ssl
   configure_firewall
   create_update_script
+
+  # Schrijf install-mode marker zodat update.sh (fallback) de juiste modus kent
+  echo "$INSTALL_MODE" > "$INFRA_DIR/.install_mode"
+
   print_summary
 }
 

@@ -28,19 +28,108 @@ APP_DIR="${APP_DIR:-/opt/lovable-app}"
 SUPABASE_DIR="${SUPABASE_DIR:-/opt/supabase}"
 MIGRATIONS_DONE_DIR="$SUPABASE_DIR/.migrations_done"
 
-# Detecteer of dit een database-only server is (geen app-dir)
-if [[ ! -d "$APP_DIR" ]]; then
-  echo -e "${GREEN}[1/2]${NC} Infra-repo updaten..."
+# Detecteer installatiemodus via marker (geschreven door install.sh)
+if [[ -f "$INFRA_DIR/.install_mode" ]]; then
+  INSTALL_MODE="$(cat "$INFRA_DIR/.install_mode")"
+else
+  # Fallback: probeer te raden op basis van aanwezige directories
+  if [[ -d "$SUPABASE_DIR" && ! -d "$APP_DIR" ]]; then
+    INSTALL_MODE="database"
+  elif [[ ! -d "$SUPABASE_DIR" && -d "$APP_DIR" ]]; then
+    INSTALL_MODE="frontend"
+  elif [[ -d "$SUPABASE_DIR" && -d "$APP_DIR" ]]; then
+    # Kan database+migraties OF full zijn — check of frontend container bestaat
+    if docker ps -a --format '{{.Names}}' | grep -q '^lovable-frontend$'; then
+      INSTALL_MODE="full"
+    else
+      INSTALL_MODE="database"
+    fi
+  else
+    echo -e "${RED}[ERROR] Kan installatiemodus niet detecteren.${NC}"
+    echo "  Draai eerst install.sh of controleer de paden."
+    exit 1
+  fi
+fi
+
+echo "  Modus: $INSTALL_MODE"
+echo ""
+
+# === DATABASE MODE ===
+if [[ "$INSTALL_MODE" == "database" ]]; then
+  echo -e "${GREEN}[1/4]${NC} Infra-repo updaten..."
   cd "$INFRA_DIR" && git pull
 
-  echo -e "${GREEN}[2/2]${NC} Supabase stack herstarten..."
+  if [[ -d "$APP_DIR/.git" ]]; then
+    echo -e "${GREEN}[2/4]${NC} App-repo updaten (voor migraties)..."
+    cd "$APP_DIR" && git pull
+  else
+    echo -e "${GREEN}[2/4]${NC} App-repo niet gevonden — migraties overgeslagen"
+  fi
+
+  echo -e "${GREEN}[3/4]${NC} Database migraties controleren..."
+  mkdir -p "$MIGRATIONS_DONE_DIR"
+  if [[ -d "$APP_DIR/supabase/migrations" ]]; then
+    for migration in "$APP_DIR/supabase/migrations/"*.sql; do
+      if [[ -f "$migration" ]]; then
+        local_name="$(basename "$migration")"
+        if [[ ! -f "$MIGRATIONS_DONE_DIR/$local_name" ]]; then
+          echo "  Nieuwe migratie: $local_name"
+          cp "$migration" "$SUPABASE_DIR/volumes/db/init/$local_name"
+          if docker exec -i supabase-db psql -U supabase -d postgres --single-transaction < "$migration"; then
+            touch "$MIGRATIONS_DONE_DIR/$local_name"
+            echo "    ✅ Succesvol"
+          else
+            echo "    ❌ Mislukt — controleer handmatig"
+          fi
+        fi
+      fi
+    done
+  fi
+
+  echo -e "${GREEN}[4/4]${NC} Supabase stack herstarten..."
   cd "$SUPABASE_DIR" && docker compose up -d
 
   echo ""
-  echo -e "${GREEN}✅ Update compleet (database-only)!${NC}"
+  echo -e "${GREEN}✅ Update compleet (database)!${NC}"
   exit 0
 fi
 
+# === FRONTEND MODE ===
+if [[ "$INSTALL_MODE" == "frontend" ]]; then
+  # Detecteer projecttype
+  if grep -q '"@tanstack/react-start"' "$APP_DIR/package.json" 2>/dev/null; then
+    PROJECT_TYPE="ssr"
+  else
+    PROJECT_TYPE="spa"
+  fi
+
+  echo -e "${GREEN}[1/3]${NC} Infra-repo updaten..."
+  cd "$INFRA_DIR" && git pull
+
+  echo -e "${GREEN}[2/3]${NC} App-code ophalen en bouwen (type: $PROJECT_TYPE)..."
+  cd "$APP_DIR" && git pull
+  if [[ "$PROJECT_TYPE" == "spa" ]]; then
+    cp "$INFRA_DIR/nginx/frontend-spa.conf" "$APP_DIR/nginx.conf"
+    docker build -t lovable-frontend -f "$INFRA_DIR/Dockerfile.spa" "$APP_DIR"
+  else
+    docker build -t lovable-frontend -f "$INFRA_DIR/Dockerfile.ssr" "$APP_DIR"
+  fi
+
+  echo -e "${GREEN}[3/3]${NC} Frontend herstarten..."
+  docker stop lovable-frontend 2>/dev/null || true
+  docker rm lovable-frontend 2>/dev/null || true
+  docker run -d \
+    --name lovable-frontend \
+    --restart unless-stopped \
+    -p 3000:3000 \
+    lovable-frontend
+
+  echo ""
+  echo -e "${GREEN}✅ Update compleet (frontend)!${NC}"
+  exit 0
+fi
+
+# === FULL MODE ===
 # Detecteer projecttype
 if grep -q '"@tanstack/react-start"' "$APP_DIR/package.json" 2>/dev/null; then
   PROJECT_TYPE="ssr"
@@ -53,15 +142,12 @@ echo "  App:    $APP_DIR"
 echo "  Type:   $PROJECT_TYPE"
 echo ""
 
-# 1. Update infra-repo
 echo -e "${GREEN}[1/5]${NC} Infra-repo updaten..."
 cd "$INFRA_DIR" && git pull
 
-# 2. Update app-repo
 echo -e "${GREEN}[2/5]${NC} App-code ophalen van GitHub..."
 cd "$APP_DIR" && git pull
 
-# 3. Rebuild frontend
 echo -e "${GREEN}[3/5]${NC} Frontend opnieuw bouwen (type: $PROJECT_TYPE)..."
 if [[ "$PROJECT_TYPE" == "spa" ]]; then
   cp "$INFRA_DIR/nginx/frontend-spa.conf" "$APP_DIR/nginx.conf"
@@ -70,7 +156,6 @@ else
   docker build -t lovable-frontend -f "$INFRA_DIR/Dockerfile.ssr" "$APP_DIR"
 fi
 
-# 4. Restart frontend container
 echo -e "${GREEN}[4/5]${NC} Frontend herstarten..."
 docker stop lovable-frontend 2>/dev/null || true
 docker rm lovable-frontend 2>/dev/null || true
@@ -80,7 +165,6 @@ docker run -d \
   -p 3000:3000 \
   lovable-frontend
 
-# 5. Database migraties (alleen nieuwe)
 echo -e "${GREEN}[5/5]${NC} Database migraties controleren..."
 mkdir -p "$MIGRATIONS_DONE_DIR"
 if [[ -d "$APP_DIR/supabase/migrations" ]]; then
