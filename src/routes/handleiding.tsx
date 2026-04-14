@@ -1234,7 +1234,7 @@ main "\$@"`;
               <p><strong>Stap 3:</strong> Maak uitvoerbaar en start de installatie:</p>
               <pre className="rounded bg-muted px-2 py-1 text-[11px]"><code>chmod +x /opt/lovable-app/install.sh{"\n"}cd /opt/lovable-app{"\n"}sudo bash install.sh</code></pre>
               <p><strong>Stap 4:</strong> Als het script vraagt om <strong>GitHub repo URL</strong>, plak dan de SSH URL van je repo:</p>
-              <pre className="rounded bg-muted px-2 py-1 text-[11px]"><code>git@github.com:JOUW-USER/JOUW-REPO.git</code></pre>
+              <pre className="rounded bg-muted px-2 py-1 text-[11px]"><code>{fill ? fill("git@github.com:JOUW-USER/JOUW-REPO.git") : "git@github.com:JOUW-USER/JOUW-REPO.git"}</code></pre>
               <p className="text-muted-foreground">Die vind je op GitHub → <strong>Code</strong> knop → tabje <strong>SSH</strong>.</p>
             </div>
             <div className="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 text-foreground">
