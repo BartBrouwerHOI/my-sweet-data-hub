@@ -1,51 +1,69 @@
 
 
-## Plan: Handleiding verduidelijken — twee repo's, twee deploy keys
+## Analyse: huidige pijnpunten
 
-### Probleem
-De handleiding heeft nu één set GitHub-velden (`JOUW-USER`/`JOUW-REPO`) maar er zijn **twee** repo's nodig:
-1. **Infra-repo** — dit project (installer, docker-compose, Dockerfiles)
-2. **App-repo** — het Lovable-project dat je wilt deployen (bijv. Access Guardian)
+Na het doorlopen van alle bestanden zie ik drie grote problemen voor beheerders:
 
-De deploy key stap noemt ook maar één repo, terwijl beide repo's een deploy key nodig hebben (of dezelfde key moet aan beide worden toegevoegd).
+### 1. Twee deploy keys / twee repo's = verwarring
+De handleiding vraagt om infra-repo EN app-repo velden, legt uit dat GitHub dezelfde deploy key niet op twee repo's toelaat, en verwijst naar machine users en PATs. Dit is de grootste bron van complexiteit. **De infra-repo bevat geen geheimen** (docker-compose.yml gebruikt env vars, geen hardcoded secrets). Er is geen reden om deze privé te houden.
 
-### Aanpassingen
+**Oplossing:** Maak de infra-repo **publiek**. Dan:
+- Clone via HTTPS zonder authenticatie: `git clone https://github.com/USER/REPO.git`
+- Beheerder heeft alleen een deploy key nodig voor de **app-repo**
+- Formulier in handleiding wordt simpeler (geen infra-user/infra-repo velden meer)
 
-#### 1. Config-formulier: aparte velden voor infra en app
-Huidige velden `githubUser` + `repoName` worden vervangen door:
-- **Infra-repo** — `infraUser` + `infraRepo` (met standaardwaarde dit project)
-- **App-repo** — `appUser` + `appRepo` (het project dat je wilt deployen)
+### 2. Te veel configuratievelden in de handleiding
+Het formulier vraagt 7 velden (infraUser, infraRepo, appUser, appRepo, serverIp, domain, serverAIp). Met een publieke infra-repo en de infra-URL hardcoded in de handleiding worden infraUser/infraRepo overbodig.
 
-De `fill()` functie krijgt nieuwe placeholders: `INFRA-USER`, `INFRA-REPO`, `APP-USER`, `APP-REPO`.
+### 3. `update.sh` in de repo root is een dode stub
+Het bestand doet niets behalve doorverwijzen naar `lovable-update`. Verwarrend als iemand het per ongeluk draait.
 
-#### 2. Deploy key stap: uitleggen dat beide repo's toegang nodig hebben
-- Eén SSH key genereren (zoals nu)
-- Die key toevoegen aan **beide** GitHub repo's (infra + app)
-- Of: als het dezelfde GitHub-eigenaar is, een personal access token gebruiken (optioneel tip)
+### 4. `nginx/frontend-ssr.conf` wordt nooit gebruikt
+De SSR Dockerfile draait Node.js direct — er is geen nginx nodig in de container. De host-nginx (geconfigureerd door install.sh) proxied al naar poort 3000. Dit bestand is misleidend.
 
-#### 3. Installatie stap: duidelijke twee-staps flow
-```text
-Stap 1: Clone de INFRA-repo
-  git clone git@github.com:INFRA-USER/INFRA-REPO.git /opt/lovable-infra
+### 5. Troubleshooting item verwijst nog naar `/opt/lovable-app/install.sh`
+Regel 707-709 verwijst naar het oude pad, moet `/opt/lovable-infra/install.sh` zijn.
 
-Stap 2: Start de installer
-  sudo bash /opt/lovable-infra/install.sh
+---
 
-  → Het script vraagt om de SSH URL van je APP-repo
-  → Voorbeeld: git@github.com:APP-USER/APP-REPO.git
-```
+## Plan: vereenvoudiging
 
-Met duidelijke labels welke URL van welk project is.
+### A. install.sh — infra-clone via HTTPS (geen deploy key nodig)
+- Hardcode de infra-repo URL als HTTPS (public) bovenaan het script
+- Verwijder de noodzaak voor een deploy key op de infra-repo
+- De `clone_app()` functie blijft SSH vragen (die repo is privé)
+- Voeg een `INFRA_REPO_URL` variabele toe bovenaan zodat het makkelijk aanpasbaar is
 
-#### 4. Architectuur diagram: expliciete twee-repo structuur
-Het bestaande diagram al updaten zodat het laat zien:
-```text
-/opt/lovable-infra/  ← INFRA-repo (installer, Dockerfiles, Supabase stack)
-/opt/lovable-app/    ← APP-repo (jouw Lovable project, bijv. Access Guardian)
-```
+### B. handleiding.tsx — formulier versimpelen
+- Verwijder `infraUser` en `infraRepo` velden
+- Hardcode de infra clone-URL in de codeblokken (HTTPS, publiek)
+- Houd alleen: `appUser`, `appRepo`, `serverIp`, `domain`, `serverAIp`
+- Deploy key sectie: verwijder "Optie B: PAT" en "machine user" — er is maar één privé repo, dus één deploy key werkt altijd
+- Verwijder de waarschuwing over "GitHub staat dezelfde deploy key niet toe op twee repo's"
 
-### Bestanden
+### C. Verwijder `nginx/frontend-ssr.conf`
+- Wordt nergens gebruikt (SSR draait op Node.js, host-nginx doet de proxy)
+- Verwijder het bestand
+
+### D. Vervang `update.sh` door directe instructie
+- Verwijder de stub, of maak er een werkend fallback-script van dat zelfstandig werkt (zonder dat `lovable-update` al geregistreerd is)
+
+### E. Fix troubleshooting pad
+- Regel 707: verander `/opt/lovable-app/install.sh` naar `/opt/lovable-infra/install.sh`
+
+### F. index.tsx — landingspagina updaten
+- Architectuurdiagram: voeg de twee-map structuur toe (infra + app)
+- Feature "SPA + SSR" benoemen
+
+---
+
+## Bestanden
+
 | Bestand | Actie |
 |---|---|
-| `src/routes/handleiding.tsx` | Config-formulier splitsen, deploy key stap uitbreiden, installatie stappen verduidelijken |
+| `install.sh` | Voeg `INFRA_REPO_URL` variabele toe, clone via HTTPS |
+| `src/routes/handleiding.tsx` | Formulier versimpelen, deploy key sectie verkorten, fix troubleshooting pad |
+| `nginx/frontend-ssr.conf` | Verwijderen (ongebruikt) |
+| `update.sh` | Werkend maken als standalone fallback |
+| `src/routes/index.tsx` | Architectuur-diagram updaten |
 
