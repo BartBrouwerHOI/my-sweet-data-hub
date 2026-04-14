@@ -1,40 +1,14 @@
 
 
-## Probleem
+## Wijziging
 
-`update.sh` kopieert het init SQL niet en vervangt `CHANGEME` niet door het werkelijke wachtwoord. Alleen `install.sh` doet dat. Als de gebruiker via `git pull` + `docker compose` update (of `update.sh` gebruikt), blijven de passwords op `CHANGEME` staan.
+De `infraUrl` in de handleiding standaard vullen met `https://github.com/BartBrouwerHOI/my-sweet-data-hub` zodat gebruikers dit niet handmatig hoeven in te typen.
 
-## Oplossing
+## Aanpak
 
-### 1. `update.sh` — sed stap toevoegen
+**Bestand:** `src/routes/handleiding.tsx`
 
-In alle drie de modi (database, frontend, full), na `git pull` van de infra-repo, het init SQL kopiëren en `CHANGEME` vervangen:
+In de `useState` initialisatie (regel 25) en de `useEffect` migratie (regel 40), de default waarde van `infraUrl` wijzigen van `""` naar `"https://github.com/BartBrouwerHOI/my-sweet-data-hub"`.
 
-```bash
-# Na git pull van infra-repo
-if [[ -f "$INFRA_DIR/volumes/db/init/00-supabase-init.sql" ]] && [[ -d "$SUPABASE_DIR" ]]; then
-  source "$SUPABASE_DIR/.env"
-  cp "$INFRA_DIR/volumes/db/init/00-supabase-init.sql" "$SUPABASE_DIR/volumes/db/init/00-supabase-init.sql"
-  sed -i "s/CHANGEME/$POSTGRES_PASSWORD/g" "$SUPABASE_DIR/volumes/db/init/00-supabase-init.sql"
-fi
-```
-
-Voeg dit toe in de `database` sectie (na regel 60-61) en de `full` sectie (na regel 146).
-
-### 2. `update.sh` — psql met `-h localhost`
-
-De bestaande migratie-commando's (regels 78 en 177) gebruiken `psql -U supabase` zonder `-h localhost`, wat peer auth failures geeft. Fix:
-
-```bash
-# Was:
-docker exec -i supabase-db psql -U supabase -d postgres --single-transaction < "$migration"
-# Wordt:
-docker exec -i supabase-db bash -c 'PGPASSWORD=$POSTGRES_PASSWORD psql -U supabase -d postgres -h localhost --single-transaction' < "$migration"
-```
-
-### Bestanden
-
-| Bestand | Wijziging |
-|---|---|
-| `update.sh` | Init SQL kopiëren+sed in database en full mode; psql `-h localhost` fix |
+Zo wordt het veld altijd vooringevuld, tenzij de gebruiker het eerder heeft overschreven in localStorage.
 
