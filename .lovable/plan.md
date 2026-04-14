@@ -1,33 +1,48 @@
 
 
-## Plan: Kopieerknop altijd zichtbaar + inline code klikbaar maken
+## Plan: Invulvelden bovenaan de handleiding voor automatische commando's
 
-### Probleem
+### Idee
 
-De `CodeBlock` component heeft al een kopieerknop, maar die is alleen zichtbaar bij hover (`opacity-0 group-hover:opacity-100`). Op mobiel werkt hover niet, en ook op desktop is het niet duidelijk dat je kunt kopiëren. Daarnaast zijn er ~47 inline `<code>` elementen (zoals `mijnapp.nl`, `JOUW-USER`, etc.) die niet kopieerbaar zijn.
+Bovenaan de handleiding komen invulvelden waar je je eigen gegevens invult. Alle commando's en links in de hele handleiding worden automatisch bijgewerkt met jouw waarden, zodat je ze direct kunt kopiëren en plakken zonder iets te vervangen.
 
-### Wijzigingen in `src/routes/handleiding.tsx`
+### Invulvelden
 
-1. **CodeBlock kopieerknop altijd zichtbaar maken** — verwijder `opacity-0 group-hover:opacity-100`, maak de knop permanent zichtbaar met subtiele styling
-2. **Inline `<code>` klikbaar maken** — nieuw `CopyCode` component dat bij klik de tekst kopieert en kort "Gekopieerd!" feedback toont (via een kleine tooltip of kleurflash). Vervangt de huidige `<code className="rounded bg-muted...">` elementen
-3. **Cursor aanpassen** — `cursor-pointer` op kopieerbare elementen zodat duidelijk is dat je kunt klikken
+| Veld | Placeholder | Voorbeeld |
+|------|------------|-----------|
+| GitHub gebruikersnaam | `JOUW-USER` | `jandevries` |
+| Repository naam | `JOUW-REPO` | `mijn-app` |
+| Server IP | `JOUW-SERVER-IP` | `192.168.1.100` |
+| Domeinnaam | `jouw-domein.nl` | `mijnapp.nl` |
+| Server A IP (split mode) | `SERVER_A_IP` | `192.168.1.101` |
 
-### Technisch
+### Hoe het werkt
+
+1. **State toevoegen** — `useState` voor elk veld, standaard leeg
+2. **Invulformulier** — compact formulier boven de inhoudsopgave met labels en input-velden. Waarden worden opgeslagen in `localStorage` zodat ze bewaard blijven bij pagina-refresh
+3. **Template functie** — een `fill(text)` helper die alle placeholders vervangt door de ingevulde waarden. Als een veld leeg is, blijft de placeholder staan (bijv. `JOUW-USER`)
+4. **CodeBlock updaten** — `CodeBlock` en `CopyCode` renderen de `fill()`-versie van hun content. De kopieerknop kopieert ook de ingevulde versie
+5. **~60 plekken** in de handleiding waar placeholders voorkomen worden automatisch bijgewerkt (geen handmatige vervangingen nodig — het gaat via de `fill()` functie)
+
+### Visueel
 
 ```text
-CopyCode component:
-- Rendert <code> met cursor-pointer + hover-effect
-- Bij klik: navigator.clipboard.writeText(children)
-- Kort visueel feedback (achtergrond flash of ✓ icoon)
-
-CodeBlock wijziging:
-- Kopieerknop: opacity altijd 100
-- Optioneel: "Klik om te kopiëren" tooltip bij hover
+┌─────────────────────────────────────────┐
+│ 🔧 Jouw gegevens                        │
+│                                         │
+│ GitHub user:  [jandevries    ]           │
+│ Repo naam:    [mijn-app      ]           │
+│ Server IP:    [192.168.1.100 ]           │
+│ Domein:       [mijnapp.nl    ]           │
+│                                         │
+│ 💡 Vul je gegevens in — alle commando's │
+│    worden automatisch aangepast.         │
+└─────────────────────────────────────────┘
 ```
 
 ### Bestand
 
 | Bestand | Actie |
 |---------|-------|
-| `src/routes/handleiding.tsx` | `CopyCode` component toevoegen, `CodeBlock` knop altijd tonen, ~47 inline `<code>` elementen vervangen door `<CopyCode>` |
+| `src/routes/handleiding.tsx` | State + localStorage + invulformulier + `fill()` helper + doorvoeren in CodeBlock/CopyCode |
 
