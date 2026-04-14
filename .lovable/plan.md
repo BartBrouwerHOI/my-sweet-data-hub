@@ -1,61 +1,47 @@
 
 
-## Plan: Info-tooltips toevoegen aan technische termen
+## Plan: Linux distro-selectie toevoegen
 
-### Wat wordt gebouwd
+### Analyse
 
-Een `InfoTooltip` component dat bij technische termen een ℹ️-icoon toont. Bij hover verschijnt een korte uitleg. Dit maakt de handleiding begrijpelijk voor leken zonder de tekst te vervuilen met lange uitleg.
+Het install script heeft 4 distro-specifieke onderdelen:
 
-### Technisch
+| Onderdeel | Ubuntu/Debian | CentOS/AlmaLinux/Rocky |
+|-----------|--------------|----------------------|
+| Packages | `apt-get install nginx certbot...` | `dnf install nginx certbot...` |
+| Firewall | `ufw` | `firewalld` |
+| Nginx config pad | `/etc/nginx/sites-available/` | `/etc/nginx/conf.d/` |
+| Certbot | `python3-certbot-nginx` (apt) | `certbot-nginx` (dnf) |
+| Docker Compose | `docker-compose-plugin` (apt) | `docker-compose-plugin` (dnf) |
 
-- Nieuw component `InfoTooltip` in `handleiding.tsx` — simpele CSS hover tooltip (geen extra dependency nodig)
-- Inline `<InfoTooltip term="..." />` naast technische begrippen
+Docker zelf (`get.docker.com`) werkt op alle distro's. De rest van het script (secrets, Supabase, frontend build) is distro-onafhankelijk.
 
-### Waar komen tooltips
+### Ondersteunde distro's
 
-| Term | Uitleg in tooltip |
-|------|-------------------|
-| SSH | Veilige verbinding met je server op afstand, zoals remote desktop maar dan via tekst |
-| Deploy key | Een SSH-sleutel die alleen leesrechten heeft op één specifieke GitHub repo |
-| Docker / Docker container | Software die in een afgesloten "doos" draait, zodat het overal hetzelfde werkt |
-| Docker Compose | Tool om meerdere Docker containers tegelijk te starten met één configuratiebestand |
-| Nginx | Webserver die bezoekers doorstuurt naar de juiste service (reverse proxy) |
-| Kong | API Gateway — controleert of API-verzoeken een geldige sleutel hebben |
-| SSL / Let's Encrypt | Versleutelde verbinding (https), gratis via Let's Encrypt |
-| PostgreSQL | De database waar al je data in wordt opgeslagen |
-| GoTrue | Supabase service die login, registratie en wachtwoord-reset regelt |
-| PostgREST | Zet je database automatisch om naar een REST API |
-| Anon Key | Publieke sleutel waarmee de frontend met de Supabase API praat |
-| Service Role Key | Geheime sleutel met volledige database-toegang — nooit in de frontend gebruiken |
-| JWT | Token (digitaal pasje) waarmee een gebruiker bewijst dat hij ingelogd is |
-| Firewall / UFW | Bepaalt welke poorten open of dicht staan op je server |
-| SMTP | Protocol voor het versturen van e-mails (verificatie, wachtwoord-reset) |
-| OAuth | Inloggen via een derde partij zoals Google |
-| Cron | Geplande taken die automatisch draaien op vaste tijden |
-| pg_dump | PostgreSQL commando om een volledige backup van je database te maken |
-| SCP | Bestanden kopiëren tussen je computer en een server via SSH |
-| Reverse proxy | Nginx stuurt verkeer door naar de juiste service op basis van de URL |
+1. **Ubuntu 22.04 / 24.04** — huidige standaard
+2. **Debian 11 / 12** — bijna identiek aan Ubuntu (apt, ufw)
+3. **CentOS Stream 9 / AlmaLinux 9 / Rocky Linux 9** — dnf, firewalld, andere nginx paden
 
-### Component design
+### Wijzigingen
 
-```tsx
-function InfoTooltip({ text }: { text: string }) {
-  return (
-    <span className="relative inline-flex group cursor-help">
-      <Info className="h-3.5 w-3.5 text-muted-foreground/60 hover:text-primary" />
-      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 
-        hidden group-hover:block w-56 rounded-md border bg-popover p-2 
-        text-xs text-popover-foreground shadow-md z-50">
-        {text}
-      </span>
-    </span>
-  );
-}
-```
+**`install.sh`**
+- Distro auto-detectie toevoegen via `/etc/os-release` (ID veld: ubuntu, debian, centos, almalinux, rocky)
+- `install_dependencies()` splitsen: apt-variant en dnf-variant
+- `configure_firewall()` splitsen: ufw-variant en firewalld-variant
+- `configure_nginx()` pad aanpassen: `sites-available` (Debian/Ubuntu) vs `conf.d` (RHEL-familie)
+- Geen gebruikersinput nodig — script detecteert automatisch
+
+**`src/routes/handleiding.tsx`**
+- Distro-keuze toggle toevoegen (naast de single/split toggle): "Ubuntu/Debian" | "CentOS/AlmaLinux/Rocky"
+- Vereisten-stap aanpassen per distro (minimale OS-versie)
+- SSH-commando's blijven hetzelfde
+- Alleen de package-install en firewall-stappen tonen relevante commando's per gekozen distro
+- InfoTooltip toevoegen dat het script de distro automatisch detecteert
 
 ### Bestanden
 
 | Bestand | Actie |
 |---------|-------|
-| `src/routes/handleiding.tsx` | `InfoTooltip` component toevoegen + ~20 tooltips plaatsen bij technische termen door de hele handleiding |
+| `install.sh` | Auto-detectie + distro-specifieke functies voor packages, firewall, nginx paden |
+| `src/routes/handleiding.tsx` | Distro-toggle UI + conditionele weergave van commando's per distro |
 
