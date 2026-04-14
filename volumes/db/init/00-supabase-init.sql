@@ -31,7 +31,9 @@ END $$;
 -- Supabase admin (zonder REPLICATION/BYPASSRLS — die vereisen superuser)
 DO $$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'supabase_admin') THEN
-    CREATE ROLE supabase_admin LOGIN CREATEROLE CREATEDB;
+    CREATE ROLE supabase_admin LOGIN CREATEROLE CREATEDB PASSWORD 'CHANGEME';
+  ELSE
+    ALTER ROLE supabase_admin WITH LOGIN PASSWORD 'CHANGEME';
   END IF;
 END $$;
 

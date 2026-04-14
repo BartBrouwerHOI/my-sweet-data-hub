@@ -485,7 +485,7 @@ ENVEOF
 start_supabase() {
   log_info "Supabase services starten..."
   cd "$SUPABASE_DIR"
-  docker compose up -d
+  docker compose up -d || true
   log_info "Wachten tot database klaar is..."
   local max_wait=30
   local waited=0
