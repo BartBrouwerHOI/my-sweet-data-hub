@@ -41,7 +41,7 @@ run_strict_migrations() {
     if [[ ! -f "$MIGRATIONS_DONE_DIR/$local_name" ]]; then
       echo "  Nieuwe migratie: $local_name"
       if docker exec -i supabase-db bash -c \
-        'PGPASSWORD=$POSTGRES_PASSWORD psql -U supabase -d postgres -h localhost -v ON_ERROR_STOP=1 -X --single-transaction' \
+        'PGPASSWORD=$POSTGRES_PASSWORD psql -U postgres -d postgres -h localhost -v ON_ERROR_STOP=1 -X --single-transaction' \
         < "$migration"; then
         touch "$MIGRATIONS_DONE_DIR/$local_name"
         echo "    ✅ Succesvol"
@@ -87,12 +87,11 @@ if [[ "$INSTALL_MODE" == "database" ]]; then
   echo -e "${GREEN}[1/4]${NC} Infra-repo updaten..."
   cd "$INFRA_DIR" && git pull
 
-  # Init SQL bijwerken met wachtwoorden
-  if [[ -f "$INFRA_DIR/volumes/db/init/00-supabase-init.sql" ]] && [[ -d "$SUPABASE_DIR" ]]; then
-    source "$SUPABASE_DIR/.env"
-    cp "$INFRA_DIR/volumes/db/init/00-supabase-init.sql" "$SUPABASE_DIR/volumes/db/init/00-supabase-init.sql"
-    sed -i "s/CHANGEME/$POSTGRES_PASSWORD/g" "$SUPABASE_DIR/volumes/db/init/00-supabase-init.sql"
-    echo "  Init SQL bijgewerkt met wachtwoorden"
+  # roles.sql en jwt.sql bijwerken vanuit infra-repo
+  if [[ -d "$SUPABASE_DIR/volumes/db" ]]; then
+    cp "$INFRA_DIR/volumes/db/roles.sql" "$SUPABASE_DIR/volumes/db/roles.sql" 2>/dev/null || true
+    cp "$INFRA_DIR/volumes/db/jwt.sql" "$SUPABASE_DIR/volumes/db/jwt.sql" 2>/dev/null || true
+    echo "  Init-scripts bijgewerkt"
   fi
 
   if [[ -d "$APP_DIR/.git" ]]; then
@@ -164,13 +163,12 @@ echo ""
 echo -e "${GREEN}[1/5]${NC} Infra-repo updaten..."
 cd "$INFRA_DIR" && git pull
 
-# Init SQL bijwerken met wachtwoorden
-if [[ -f "$INFRA_DIR/volumes/db/init/00-supabase-init.sql" ]] && [[ -d "$SUPABASE_DIR" ]]; then
-  source "$SUPABASE_DIR/.env"
-  cp "$INFRA_DIR/volumes/db/init/00-supabase-init.sql" "$SUPABASE_DIR/volumes/db/init/00-supabase-init.sql"
-  sed -i "s/CHANGEME/$POSTGRES_PASSWORD/g" "$SUPABASE_DIR/volumes/db/init/00-supabase-init.sql"
-  echo "  Init SQL bijgewerkt met wachtwoorden"
-fi
+  # roles.sql en jwt.sql bijwerken vanuit infra-repo
+  if [[ -d "$SUPABASE_DIR/volumes/db" ]]; then
+    cp "$INFRA_DIR/volumes/db/roles.sql" "$SUPABASE_DIR/volumes/db/roles.sql" 2>/dev/null || true
+    cp "$INFRA_DIR/volumes/db/jwt.sql" "$SUPABASE_DIR/volumes/db/jwt.sql" 2>/dev/null || true
+    echo "  Init-scripts bijgewerkt"
+  fi
 
 echo -e "${GREEN}[2/5]${NC} App-code ophalen van GitHub..."
 cd "$APP_DIR" && git pull
