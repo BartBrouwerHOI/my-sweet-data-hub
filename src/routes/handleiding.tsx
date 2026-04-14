@@ -26,7 +26,7 @@ function HandleidingPage() {
             "Architectuur kiezen",
             "GitHub deploy key instellen",
             "Single-server installatie",
-            "Split: Database-server",
+            "Split: Supabase-server (backend)",
             "Split: Frontend-server",
             "Na installatie",
             "Updates draaien",
@@ -59,22 +59,32 @@ function HandleidingPage() {
 
       {/* Stap 2 */}
       <Section id="stap-2" number={2} title="Architectuur kiezen">
+        <Tip>
+          <strong>Wat is Supabase?</strong> Supabase is niet alleen een database — het is een complete backend-stack: PostgreSQL (database), GoTrue (authenticatie), PostgREST (API), Storage (bestanden) en Realtime (websockets). Al deze services draaien samen als Docker containers.
+        </Tip>
         <p>Je hebt twee opties:</p>
 
         <h4 className="mt-4 font-semibold text-foreground">Optie A: Single server</h4>
-        <p>Alles draait op één VM: frontend, Supabase, PostgreSQL. Simpelst om op te zetten.</p>
+        <p>Alles draait op één VM: je React frontend + de volledige Supabase stack. Simpelst om op te zetten.</p>
         <CodeBlock>{`[VM - 4GB RAM]
-├── Frontend (Docker)
-├── Supabase Auth, REST, Storage, Realtime (Docker)
-├── PostgreSQL (Docker)
+├── React Frontend (Docker)
+├── Supabase stack (Docker)
+│   ├── PostgreSQL (database)
+│   ├── GoTrue (authenticatie)
+│   ├── PostgREST (API)
+│   ├── Storage (bestanden)
+│   └── Realtime (websockets)
 └── Nginx + SSL`}</CodeBlock>
 
         <h4 className="mt-6 font-semibold text-foreground">Optie B: Split setup</h4>
-        <p>Database op Server A, frontend op Server B. Beter schaalbaar en makkelijker te back-uppen.</p>
-        <CodeBlock>{`[Server A - Database - 2GB RAM]       [Server B - Frontend - 2GB RAM]
-├── PostgreSQL (Docker)                ├── Frontend (Docker)
-├── Supabase Auth, REST, etc.          ├── Nginx + SSL
-└── Firewall: poort 8000 open          └── .env → wijst naar Server A`}</CodeBlock>
+        <p>Supabase (backend) op Server A, React frontend op Server B. Beter schaalbaar en makkelijker te back-uppen.</p>
+        <CodeBlock>{`[Server A - Supabase backend - 2GB RAM]    [Server B - Frontend - 2GB RAM]
+├── PostgreSQL (database)                  ├── React app (Docker)
+├── GoTrue (authenticatie)                 ├── Nginx + SSL
+├── PostgREST (API)                        └── .env → wijst naar Server A
+├── Storage (bestanden)
+├── Realtime (websockets)
+└── Firewall: poort 8000 open`}</CodeBlock>
       </Section>
 
       {/* Stap 3 */}
@@ -124,34 +134,34 @@ sudo bash install.sh`}</CodeBlock>
       </Section>
 
       {/* Stap 5 */}
-      <Section id="stap-5" number={5} title="Split: Database-server">
-        <p>Op Server A (de database-VM):</p>
+      <Section id="stap-5" number={5} title="Split: Supabase-server (backend)">
+        <p>Op Server A — hier draait de volledige Supabase stack (PostgreSQL, Auth, API, Storage, Realtime):</p>
         <CodeBlock>{`git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
 cd /opt/lovable-app
 sudo bash install.sh
-# Kies: "Alleen database"`}</CodeBlock>
-        <p>Dit start alleen de Supabase containers (PostgreSQL, Auth, REST, Storage, Realtime, Kong).</p>
+# Kies: "Alleen Supabase (backend)"`}</CodeBlock>
+        <p>Dit start alle Supabase containers: PostgreSQL, GoTrue (auth), PostgREST (API), Storage, Realtime en Kong (API gateway).</p>
 
         <h4 className="mt-4 font-semibold text-foreground">Firewall instellen</h4>
         <p>Zorg dat de frontend-server erbij kan:</p>
-        <CodeBlock>{`# Sta de frontend-server toe op poort 8000 (Kong API Gateway)
+        <CodeBlock>{`# Sta de frontend-server toe op poort 8000 (Supabase API Gateway)
 sudo ufw allow from FRONTEND_SERVER_IP to any port 8000
 
-# Optioneel: direct PostgreSQL toegang (poort 5432)
+# Optioneel: directe PostgreSQL toegang (poort 5432)
 sudo ufw allow from FRONTEND_SERVER_IP to any port 5432`}</CodeBlock>
         <Tip>Noteer de Anon Key en Service Role Key uit de output — die heb je nodig op de frontend-server.</Tip>
       </Section>
 
       {/* Stap 6 */}
       <Section id="stap-6" number={6} title="Split: Frontend-server">
-        <p>Op Server B (de frontend-VM):</p>
+        <p>Op Server B — hier draait alleen je React app (geen database, geen Supabase):</p>
         <CodeBlock>{`git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
 cd /opt/lovable-app
 sudo bash install.sh
 # Kies: "Alleen frontend"
-# Voer het IP/domein van de database-server in wanneer gevraagd
-# Voer de Anon Key in van de database-server`}</CodeBlock>
-        <p>Dit bouwt alleen de frontend container en configureert Nginx met SSL.</p>
+# Voer het IP/domein van de Supabase-server (Server A) in wanneer gevraagd
+# Voer de Anon Key in van de Supabase-server`}</CodeBlock>
+        <p>Dit bouwt alleen de React frontend container en configureert Nginx met SSL. Alle database- en auth-calls gaan via de API naar Server A.</p>
       </Section>
 
       {/* Stap 7 */}
