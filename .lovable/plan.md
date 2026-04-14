@@ -2,52 +2,50 @@
 
 ## Analyse: huidige staat
 
-Na het doorlopen van alle bestanden is de werkwijze nu grotendeels logisch en goed kopieerbaar. Er zijn nog **7 concrete problemen** die de beheerderservaring verstoren:
+De werkwijze is nu goed en logisch. Scripts en handleiding zijn gesynchroniseerd. Er zijn nog **4 kleine problemen**:
 
 ### Gevonden problemen
 
-**1. Volgorde vragen install.sh is onlogisch voor database mode**
-In database mode vraagt het script eerst `gather_input()` (domein, email, wachtwoorden), daarna pas "Wil je de app-repo clonen?" (regel 820-829), en pas DAN `clone_app()` die om de GitHub URL vraagt. De beheerder krijgt de vragen in een vreemde volgorde: wachtwoord → clone ja/nee → repo URL. Beter: alle vragen eerst, dan alle acties.
+**1. install.sh: database mode Nginx config is overbodig**
+In database mode (regel 514-526) wordt een Nginx config aangemaakt die alleen `{"status":"ok"}` teruggeeft. Maar de beheerder heeft ook al Nginx als dependency geïnstalleerd (regel 166). In database mode is Nginx niet nodig — Kong (poort 8000) handelt alles af. Dit is verwarrend: waarom draait er een webserver die niets doet?
 
-**2. Database mode: `setup_supabase()` gebruikt `$APP_DIR/supabase/migrations` (regel 369)**
-Als de beheerder "nee" zegt bij "clone voor migraties?", bestaat `$APP_DIR` niet. `setup_supabase()` doet `cp "$APP_DIR/supabase/migrations/"*.sql` — dit faalt niet (door `|| true`), maar het is rommelig. Geen fout, maar onnodig verwarrend in de logs.
+Twee opties:
+- A) Skip Nginx installatie + config helemaal in database mode
+- B) Laat het, want het doet geen kwaad en SSL voor Studio is handig
 
-**3. Frontend mode: `create_update_script()` genereert update-script met migratie-logica (stap 5/5)**
-In frontend mode is er geen database — toch bevat het gegenereerde `lovable-update` script migratie-stappen die naar `/opt/supabase` verwijzen. Die map bestaat niet op een frontend-only server. Het werkt (dankzij `-d` checks) maar is verwarrend output.
+**Aanbeveling:** Laat het staan — het is nuttig als health-check endpoint en voor eventuele SSL op Studio later. Geen actie nodig.
 
-**4. `print_summary()` toont `Project Type:` ook in database mode (regel 758)**
-In database mode is `$PROJECT_TYPE` leeg — de output toont `Type: ` met een lege waarde. Ziet er kapot uit.
+**2. install.sh: `sleep 15` na `start_supabase()` (regel 440)**
+Hardcoded sleep is fragiel. Beter: een poll-loop die wacht tot de database daadwerkelijk klaar is. Maar dit is een minor improvement, niet een bug.
 
-**5. Handleiding split mode: Server A "deploy key" is onnodig als je "nee" zegt bij migraties**
-De handleiding zegt "herhaal deze stap op beide servers" voor de deploy key. Maar als de beheerder op Server A "nee" zegt bij "app-repo clonen voor migraties?", dan is er geen deploy key nodig op Server A. De handleiding zou dit conditioneel moeten vermelden.
+**3. Handleiding: Server B codeblok bevat commentaar dat niet kopieerbaar is**
+Regel 484-488 in handleiding.tsx — het codeblok voor Server B bevat:
+```
+# Kies: 3) Alleen frontend
+# Voer de SSH URL van je APP-repo in: ...
+# Voer het IP-adres van Server A in wanneer gevraagd
+# Voer de Anon Key in die je bij Server A hebt genoteerd
+```
+Dit zijn instructies vermomd als commentaar in een kopieerbaar blok. Als de beheerder dit blok kopieert en plakt, worden de comments mee-geplakt. Beter: verplaats deze instructies naar gewone tekst ONDER het codeblok, en houd het codeblok clean (alleen de daadwerkelijke commando's).
 
-**6. `credentials.txt` bevat `App Dir: /opt/lovable-app` ook in database mode zonder clone**
-Als de beheerder geen app-repo cloned, staat er toch `App Dir: /opt/lovable-app` in credentials.txt — misleidend.
-
-**7. Handleiding: "Na installatie" sectie heeft geen instructie voor wanneer iets NIET werkt**
-De checks (`docker ps`, `curl`) worden getoond, maar er staat niet wat je moet doen als `docker ps` 0 containers toont of `curl` faalt. Een simpele "Werkt het niet? Zie Troubleshooting" link zou helpen.
+**4. Handleiding: `<ANON_KEY>` placeholder in na-installatie is inconsistent**
+Bij "API testen" staat `curl ... -H "apikey: <ANON_KEY>"`. De `<ANON_KEY>` wordt NIET vervangen door de `fill()` functie (die vervangt alleen `JOUW-SERVER-IP`, `APP-USER` etc.). Dit is bewust (de beheerder moet de key uit credentials.txt halen), maar de handleiding legt dit niet uit bij de eerste keer dat het voorkomt. Een korte uitleg zou helpen.
 
 ---
 
 ## Plan: fixes
 
-### A. install.sh: volgorde verbeteren
-- Verplaats de "wil je app-repo clonen?" vraag naar `gather_input()`, zodat alle vragen bij elkaar staan
-- Sla het resultaat op in een variabele `CLONE_FOR_MIGRATIONS`
-- De daadwerkelijke clone gebeurt later op dezelfde plek (regel 816+)
+### A. Handleiding: Server B codeblok opschonen
+- Verplaats de 4 commentaarregels uit het codeblok naar een `<ul>` eronder
+- Codeblok bevat alleen de 3 daadwerkelijke commando's
 
-### B. install.sh: `print_summary()` fix voor database mode
-- Verberg de `Type:` regel als `$PROJECT_TYPE` leeg is
-- Verberg `App Dir:` in `credentials.txt` als er geen app-dir is
+### B. Handleiding: verduidelijk `<ANON_KEY>` bij eerste gebruik
+- De tekst "Kopieer de Anon Key uit de output hierboven en plak die in het volgende commando" staat er al. Dit is voldoende — geen wijziging nodig.
 
-### C. install.sh: frontend mode update-script zonder migraties
-- Splits `create_update_script()` in drie varianten: full (5 stappen), database (4 stappen), frontend (3 stappen — geen migraties)
+### C. install.sh: `sleep 15` vervangen door poll-loop
+- Vervang de hardcoded sleep door een loop die `pg_isready` checkt (max 30 seconden)
 
-### D. Handleiding: deploy key conditioneel voor split mode
-- Bij split mode: vermeld dat Server A alleen een deploy key nodig heeft als je migraties wilt draaien
-
-### E. Handleiding: "Werkt het niet?" link na de checks
-- Voeg onder elk na-installatie blok een korte zin toe: "Werkt iets niet? Zie stap X (Troubleshooting)."
+**Conclusie:** Alleen 2 kleine wijzigingen nodig.
 
 ---
 
@@ -55,6 +53,6 @@ De checks (`docker ps`, `curl`) worden getoond, maar er staat niet wat je moet d
 
 | Bestand | Wijziging |
 |---|---|
-| `install.sh` | Volgorde vragen verbeteren, print_summary leeg type fixen, frontend update-script zonder migraties, credentials.txt conditioneel |
-| `src/routes/handleiding.tsx` | Deploy key conditioneel bij split, "werkt het niet?" link bij na-installatie |
+| `src/routes/handleiding.tsx` | Server B codeblok: verplaats instructie-comments naar tekst |
+| `install.sh` | Vervang `sleep 15` door `pg_isready` poll-loop |
 
