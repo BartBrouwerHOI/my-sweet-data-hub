@@ -1,65 +1,90 @@
 
-## Plan: GitHub repo URL prompt ondubbelzinnig maken
+## Plan: installer robuust maken voor bestaande /opt/lovable-app map
 
-### Probleem
-De flow is nog verwarrend bij handmatig aangemaakte `install.sh`:
+### Diagnose
+De SSH-verbinding werkt nu wel:  
+`Hi BartBrouwerHOI/Access-Guardian! You've successfully authenticated...`
 
-- De gebruiker start `install.sh` correct
-- Daarna vraagt het script om de **GitHub repo URL**
-- Omdat niet duidelijk is wat daar verwacht wordt, plakt de gebruiker de **inhoud van het script** in plaats van een repo-URL
+De nieuwe fout komt door iets anders:
 
-De handleiding legt nu niet expliciet genoeg uit dat handmatig `install.sh` aanmaken alleen het installer-bestand toevoegt — het script moet daarna nog steeds de **hele app-repo via SSH clonen**.
+1. `git clone` faalt omdat `/opt/lovable-app` al bestaat en niet leeg is
+2. daarna is `/opt/lovable-app` handmatig verwijderd terwijl de shell nog **in die map** stond
+3. daardoor krijg je:
+   - `getcwd: cannot access parent directories`
+   - `bash: install.sh: No such file or directory`
+
+Met andere woorden: niet SSH is nu het probleem, maar de installer-flow rond een half-bestaande app-map.
 
 ### Aanpak
 
-#### 1. `install.sh` duidelijker maken
-In `clone_app()` de repo-invoer uitbreiden van een kale prompt naar een korte uitleg vóór de prompt:
+#### 1. `install.sh` veiliger maken bij bestaande app-map
+In `clone_app()` de huidige check uitbreiden:
 
-- uitleg dat het script nu de **hele GitHub repo** gaat clonen
-- expliciet zeggen: **plak hier niet de inhoud van `install.sh`**
-- exact voorbeeld tonen:
-  `git@github.com:JOUW-USER/JOUW-REPO.git`
+- als `/opt/lovable-app` een geldige git repo is: `git pull`
+- als `/opt/lovable-app` bestaat maar **geen** geldige repo is:
+  - duidelijke melding tonen
+  - uitleggen dat dit meestal een lege/incomplete map van een eerdere poging is
+  - vragen of het script de map veilig mag verwijderen en opnieuw clonen
+- vóór verwijderen eerst naar een veilige map gaan (bijv. `/`) zodat het script nooit “zijn eigen werkdirectory” kwijt raakt
+- daarna pas opnieuw `git clone`
 
-Daarna de invoer valideren vóór de SSH-test / `git clone`:
+Dit voorkomt dat gebruikers zelf `rm -rf /opt/lovable-app` hoeven uit te voeren vanuit de verkeerde directory.
 
-- leeg invoerblok afwijzen
-- invoer met meerdere regels of `#!/bin/bash` afwijzen
-- alleen SSH-format accepteren, zoals:
-  `git@github.com:gebruiker/repo.git`
+#### 2. Handleiding corrigeren voor handmatige `install.sh` flow
+In `src/routes/handleiding.tsx` de fallback-instructies aanscherpen:
 
-Bij foute invoer een duidelijke melding tonen en opnieuw vragen.
-
-#### 2. Handleiding aanpassen in `InstallShMissing`
-In de handmatige flow een extra expliciete stap toevoegen ná `sudo bash install.sh`:
-
-- “Als het script vraagt om **GitHub repo URL**, plak dan de SSH URL van je repo”
-- erbij vermelden waar je die vindt:
-  **GitHub → Code → SSH**
-- voorbeeld tonen:
-  `git@github.com:JOUW-USER/JOUW-REPO.git`
-- extra waarschuwing:
-  “Plak hier niet opnieuw de tekst van `install.sh`”
+- vóór `nano /opt/lovable-app/install.sh` eerst de map aanmaken:
+  - `sudo mkdir -p /opt/lovable-app`
+- starten met een **absoluut pad**:
+  - `sudo bash /opt/lovable-app/install.sh`
+  - niet afhankelijk van de huidige directory
+- extra waarschuwing toevoegen:
+  - als je `/opt/lovable-app` verwijdert terwijl je daarin staat, doe eerst `cd ~` of `cd /root`
 
 #### 3. Embedded `installScript` synchroniseren
-De `installScript` string in `src/routes/handleiding.tsx` gelijk trekken met de echte `install.sh`, zodat de handmatig gekopieerde versie exact dezelfde duidelijke prompt en validatie gebruikt.
+De ingebouwde `installScript` string in `InstallShMissing` updaten met dezelfde robuustere logica als de echte `install.sh`, zodat handmatig gekopieerde versies exact hetzelfde gedrag hebben.
+
+#### 4. Troubleshooting aanvullen
+Een korte troubleshooting-blok toevoegen voor deze 3 concrete meldingen:
+
+- `destination path '/opt/lovable-app' already exists and is not an empty directory`
+- `getcwd: cannot access parent directories`
+- `bash: install.sh: No such file or directory`
+
+Met bijbehorende uitleg in gewone taal:
+- map bestaat al/incompleet
+- je staat in een map die je net verwijderd hebt
+- daarom is `install.sh` ook weg of niet meer bereikbaar
 
 ### Bestanden
 | Bestand | Actie |
 |---|---|
-| `install.sh` | Repo-prompt uitbreiden met uitleg + voorbeeld + invoervalidatie |
-| `src/routes/handleiding.tsx` | `InstallShMissing` aanvullen met expliciete repo-URL stap en waarschuwing |
-| `src/routes/handleiding.tsx` | Embedded `installScript` updaten met dezelfde verbeterde prompt/validatie |
+| `install.sh` | bestaande/incomplete app-map detecteren, veilige cleanup prompt, daarna opnieuw clonen |
+| `src/routes/handleiding.tsx` | handmatige stappen aanpassen: map aanmaken, absoluut pad gebruiken, waarschuwing over verwijderen vanuit huidige map |
+| `src/routes/handleiding.tsx` | embedded `installScript` gelijktrekken met de echte fix |
+| `src/routes/handleiding.tsx` | troubleshooting uitbreiden met deze specifieke foutmeldingen |
 
 ### Technische details
-- Validatie op SSH repo-formaat, bijvoorbeeld:
-  `git@github.com:owner/repo.git`
-- Expliciet blokkeren van invoer die lijkt op geplakte scriptinhoud:
-  - begint met `#!/bin/bash`
-  - bevat regeleinden
-  - bevat geen geldig `git@github.com:` patroon
+- Gebruik een repo-check die echt onderscheid maakt tussen:
+  - bestaande geldige repo
+  - bestaande map zonder repo
+- Bij cleanup eerst uit de doelmap weg:
+  ```text
+  cd /
+  rm -rf /opt/lovable-app
+  ```
+- Gebruik in documentatie consequent:
+  ```text
+  sudo bash /opt/lovable-app/install.sh
+  ```
+  in plaats van:
+  ```text
+  sudo bash install.sh
+  ```
 
 ### Resultaat
-Na deze wijziging is voor gebruikers meteen duidelijk:
-1. `install.sh` is alleen de installer
-2. daarna moet nog de **repo-URL** ingevuld worden
-3. de juiste waarde is de **SSH clone URL**, niet de scriptinhoud
+Na deze wijziging:
+1. blokkeert de installer niet meer onduidelijk op een half-bestaande `/opt/lovable-app`
+2. hoeven gebruikers niet meer handmatig in een kapotte shell-state terecht te komen
+3. is de handleiding veilig om opnieuw te starten, ook na een mislukte eerdere poging
+4. is duidelijk dat de SSH-check nu geslaagd is en dat alleen de map-/rerun-flow nog opgelost moest worden
