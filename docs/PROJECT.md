@@ -4,6 +4,8 @@
 
 Dit is een **universele self-hosted deployment toolkit** waarmee beheerders elk Lovable-project (React SPA of TanStack Start SSR) met een volledige Supabase backend kunnen deployen op een eigen VPS of Proxmox server — zonder dat het doelproject zelf deployment-bestanden nodig heeft.
 
+> ⚠️ **Deze repository is publiek.** Zet hier **nooit** wachtwoorden, API keys, tokens of andere geheimen in. Alle secrets worden pas gegenereerd op de server door `install.sh` en opgeslagen in `/opt/supabase/.env` en `/opt/supabase/credentials.txt` (beide `chmod 600`). Bestanden zoals `docker-compose.yml` en `kong.yml` gebruiken `${VARIABELE}` placeholders die pas op de server worden ingevuld.
+
 ## Doelgroep
 
 Systeembeheerders die Lovable-projecten willen hosten op eigen infrastructuur in plaats van Lovable Cloud. Het project is in het **Nederlands** geschreven, gericht op Nederlandse/Belgische beheerders.

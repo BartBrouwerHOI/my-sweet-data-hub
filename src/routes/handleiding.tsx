@@ -255,6 +255,10 @@ function HandleidingPage() {
           <strong>Twee repo's, één server.</strong> De <strong>infra-repo</strong> (dit project) is publiek en bevat de installer, Dockerfiles en Supabase stack. 
           Je <strong>app-repo</strong> is je privé Lovable project. Het install-script koppelt ze aan elkaar.
         </Tip>
+        <Warn>
+          De infra-repo is <strong>publiek</strong> — zet hier nooit wachtwoorden, API keys of tokens in. 
+          Alle secrets worden pas gegenereerd op de server door <CopyCode fill={fill}>install.sh</CopyCode> en staan alleen in <CopyCode fill={fill}>/opt/supabase/.env</CopyCode> en <CopyCode fill={fill}>/opt/supabase/credentials.txt</CopyCode>.
+        </Warn>
         <CodeBlock fill={fill}>{`/opt/lovable-infra/  ← Infra-repo (publiek, via HTTPS gecloned)
 │  install.sh, Dockerfile.spa, Dockerfile.ssr, docker-compose.yml
 │
