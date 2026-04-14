@@ -64,7 +64,7 @@ function HandleidingPage() {
         </p>
         <CodeBlock>{`ssh root@JOUW-SERVER-IP`}</CodeBlock>
         <p className="text-sm text-muted-foreground">
-          Vervang <code className="rounded bg-muted px-1.5 py-0.5 text-xs text-foreground">JOUW-SERVER-IP</code> door het IP-adres van je Proxmox VM 
+          Vervang <CopyCode>JOUW-SERVER-IP</CopyCode> door het IP-adres van je Proxmox VM 
           (te vinden in je Proxmox dashboard). Op Windows kun je <a href="https://www.putty.org/" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">PuTTY</a> of 
           Windows Terminal gebruiken, op Mac/Linux open je gewoon de Terminal app.
         </p>
@@ -268,7 +268,7 @@ chmod 600 ~/.ssh/config
 
 # Test de verbinding
 ssh -T git@github.com`}</CodeBlock>
-        <Tip>Je zou moeten zien: <code className="rounded bg-muted px-1.5 py-0.5 text-xs">"Hi username! You've successfully authenticated"</code>. Het woord "username" is je GitHub-gebruikersnaam.</Tip>
+        <Tip>Je zou moeten zien: <CopyCode>"Hi username! You've successfully authenticated"</CopyCode>. Het woord "username" is je GitHub-gebruikersnaam.</Tip>
       </Step>
 
       {/* === SINGLE MODE: Installatie === */}
@@ -284,20 +284,20 @@ sudo git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
 cd /opt/lovable-app
 sudo bash install.sh`}</CodeBlock>
           <Tip>
-            <strong>JOUW-USER</strong> = je GitHub gebruikersnaam (bijv. <code className="rounded bg-muted px-1.5 py-0.5 text-xs">jandevries</code>)<br />
-            <strong>JOUW-REPO</strong> = de naam van je repository (bijv. <code className="rounded bg-muted px-1.5 py-0.5 text-xs">mijn-app</code>)<br />
+            <strong>JOUW-USER</strong> = je GitHub gebruikersnaam (bijv. <CopyCode>jandevries</CopyCode>)<br />
+            <strong>JOUW-REPO</strong> = de naam van je repository (bijv. <CopyCode>mijn-app</CopyCode>)<br />
             Je vindt dit in de URL van je repo: github.com/<strong>JOUW-USER</strong>/<strong>JOUW-REPO</strong>
           </Tip>
           <p>Het script vraagt om:</p>
           <ul className="list-inside list-disc space-y-1">
-            <li><strong>Installatiemodus</strong> — kies <code className="rounded bg-muted px-1.5 py-0.5 text-sm">1) Volledige installatie</code></li>
-            <li><strong>Domeinnaam</strong> — bijv. <code className="rounded bg-muted px-1.5 py-0.5 text-sm">mijnapp.nl</code> of laat leeg voor IP</li>
+            <li><strong>Installatiemodus</strong> — kies <CopyCode>1) Volledige installatie</CopyCode></li>
+            <li><strong>Domeinnaam</strong> — bijv. <CopyCode>mijnapp.nl</CopyCode> of laat leeg voor IP</li>
             <li><strong>Admin e-mail</strong> — voor het <InfoTooltip text="Versleutelde verbinding (https) zodat data veilig verstuurd wordt. Let's Encrypt geeft gratis SSL-certificaten uit." /> certificaat</li>
             <li><strong>Database wachtwoord</strong> — kies iets sterks, je hebt dit later nodig</li>
             <li><strong>Dashboard wachtwoord</strong> — voor Supabase Studio (admin paneel)</li>
           </ul>
           <p className="mt-2">Het script doet de rest: het detecteert automatisch of je {distro === "debian" ? "Ubuntu/Debian" : "CentOS/AlmaLinux/Rocky"} draait en installeert de juiste packages ({distro === "debian" ? "apt" : "dnf"}), <InfoTooltip text="Software die in een afgesloten 'doos' draait, zodat het overal hetzelfde werkt — ongeacht het besturingssysteem." />, secrets genereren, containers starten, <InfoTooltip text="Webserver die bezoekers doorstuurt naar de juiste service (reverse proxy)." /> + SSL en firewall ({distro === "debian" ? "UFW" : "firewalld"}).</p>
-          <Warn>Het script zet <code className="rounded bg-muted px-1.5 py-0.5 text-sm">GOTRUE_MAILER_AUTOCONFIRM: true</code>. Dit bevestigt e-mailadressen automatisch zonder verificatie-email. Voor productie: stel <InfoTooltip text="Protocol voor het versturen van e-mails — nodig voor verificatie-mails en wachtwoord-reset." /> in (stap {steps.findIndex(s => s.id === "smtp-oauth") + 1}) en zet dit op <code className="rounded bg-muted px-1.5 py-0.5 text-sm">false</code>.</Warn>
+          <Warn>Het script zet <CopyCode>GOTRUE_MAILER_AUTOCONFIRM: true</CopyCode>. Dit bevestigt e-mailadressen automatisch zonder verificatie-email. Voor productie: stel <InfoTooltip text="Protocol voor het versturen van e-mails — nodig voor verificatie-mails en wachtwoord-reset." /> in (stap {steps.findIndex(s => s.id === "smtp-oauth") + 1}) en zet dit op <CopyCode>false</CopyCode>.</Warn>
         </Step>
       )}
 
@@ -330,7 +330,7 @@ sudo firewall-cmd --reload`}</CodeBlock>
           )}
           <Warn>
             <strong>Belangrijk!</strong> Noteer de <strong><InfoTooltip text="Publieke sleutel waarmee de frontend met de Supabase API praat. Dit is geen geheim — hij wordt in de browser gebruikt." /></strong> die het script aan het einde toont — 
-            die heb je nodig bij het installeren van Server B. Je vindt deze ook terug in <code className="rounded bg-muted px-1.5 py-0.5 text-xs">/opt/supabase/credentials.txt</code>.
+            die heb je nodig bij het installeren van Server B. Je vindt deze ook terug in <CopyCode>/opt/supabase/credentials.txt</CopyCode>.
           </Warn>
           <Warn>Zet poort 8000 <strong>niet</strong> open voor iedereen. Beperk het tot het IP van Server B.</Warn>
         </Step>
@@ -392,7 +392,7 @@ curl -I http://localhost:3000
 # Test of de API via Nginx bereikbaar is
 curl http://localhost/rest/v1/ -H "apikey: JOUW_ANON_KEY"`}</CodeBlock>
             <Location icon="browser" text="Browser op je eigen computer" />
-            <p>Open <code className="rounded bg-muted px-1.5 py-0.5 text-sm">https://jouw-domein.nl</code> — je zou je app moeten zien.</p>
+            <p>Open <CopyCode>https://jouw-domein.nl</CopyCode> — je zou je app moeten zien.</p>
           </>
         )}
       </Step>
@@ -507,7 +507,7 @@ cd /opt/supabase && docker compose restart auth`}</CodeBlock>
           <ol className="list-inside list-decimal space-y-1">
             <li>Ga naar <a href="https://console.cloud.google.com" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">Google Cloud Console</a></li>
             <li>Maak OAuth 2.0 credentials aan (APIs & Services → Credentials)</li>
-            <li>Redirect URI: <code className="rounded bg-muted px-1.5 py-0.5 text-sm">https://jouw-domein.nl/auth/v1/callback</code></li>
+            <li>Redirect URI: <CopyCode>https://jouw-domein.nl/auth/v1/callback</CopyCode></li>
           </ol>
 
           <Location icon="terminal" text={`Terminal op je ${mode === "split" ? "backend-server (A)" : "VM"}`} />
@@ -586,7 +586,7 @@ sudo crontab -e
 tar -czf /opt/backups/storage_backup_$(date +%Y%m%d).tar.gz /opt/supabase/volumes/storage/`}</CodeBlock>
         </div>
 
-        <Tip>Bewaar backups op een andere locatie — gebruik <code className="rounded bg-muted px-1.5 py-0.5 text-xs">rsync</code> of <InfoTooltip text="Bestanden kopiëren tussen je computer en een server via SSH." /> naar een andere Proxmox VM of externe opslag.</Tip>
+        <Tip>Bewaar backups op een andere locatie — gebruik <CopyCode>rsync</CopyCode> of <InfoTooltip text="Bestanden kopiëren tussen je computer en een server via SSH." /> naar een andere Proxmox VM of externe opslag.</Tip>
       </Step>
 
       <footer className="mt-16 border-t border-border pt-8 pb-12 text-center text-sm text-muted-foreground">
