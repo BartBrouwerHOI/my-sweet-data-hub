@@ -368,26 +368,25 @@ ssh -T -i ~/.ssh/deploy_key git@github.com`}</CodeBlock>
       {mode === "single" && (
         <Step id="installatie" number={steps.findIndex(s => s.id === "installatie") + 1} title={<>Installatie <StepBadge type="verplicht" /></>}>
           <Location icon="terminal" text="Terminal op je VM" />
-          <p>Clone je repo en draai het install-script:</p>
-          <Warn>Gebruik <strong>niet</strong> <CopyCode fill={fill}>sudo git clone</CopyCode> — sudo draait als root en heeft geen toegang tot jouw SSH key. Maak eerst de map aan, dan clone je als gewone gebruiker.</Warn>
-          <CodeBlock fill={fill}>{`# Maak de map aan en geef jezelf rechten
-sudo mkdir -p /opt/lovable-app
-sudo chown $USER:$USER /opt/lovable-app
 
-# Clone als huidige gebruiker (die de SSH key heeft)
-git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
-
-# Start de installer
-cd /opt/lovable-app
-
-# Controleer of install.sh aanwezig is
-ls install.sh`}</CodeBlock>
-          <InstallShMissing fill={fill} />
           <Tip>
-            <strong>JOUW-USER</strong> = je GitHub gebruikersnaam (bijv. <CopyCode fill={fill}>jandevries</CopyCode>)<br />
-            <strong>JOUW-REPO</strong> = de naam van je repository (bijv. <CopyCode fill={fill}>mijn-app</CopyCode>)<br />
-            Je vindt dit in de URL van je repo: github.com/<strong>JOUW-USER</strong>/<strong>JOUW-REPO</strong>
+            <strong>Hoe werkt het?</strong> Dit project is de <strong>infrastructuur-laag</strong> (installer, Supabase stack, Dockerfiles). 
+            Je app-code wordt apart gecloned. Zo kun je dezelfde infra gebruiken voor elk Lovable-project.
           </Tip>
+
+          <p><strong>Stap 1:</strong> Clone de <strong>infra-repo</strong> (dit project):</p>
+          <Warn>Gebruik <strong>niet</strong> <CopyCode fill={fill}>sudo git clone</CopyCode> — sudo draait als root en heeft geen toegang tot jouw SSH key.</Warn>
+          <CodeBlock fill={fill}>{`# Maak de map aan en geef jezelf rechten
+sudo mkdir -p /opt/lovable-infra
+sudo chown $USER:$USER /opt/lovable-infra
+
+# Clone de infra-repo (dit project met installer + Supabase stack)
+git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-infra`}</CodeBlock>
+
+          <p><strong>Stap 2:</strong> Start de installer:</p>
+          <CodeBlock fill={fill}>{`# Start de installer
+sudo bash /opt/lovable-infra/install.sh`}</CodeBlock>
+
           <p>Het script vraagt om:</p>
           <ul className="list-inside list-disc space-y-1">
             <li><strong>Installatiemodus</strong> — kies <CopyCode fill={fill}>1) Volledige installatie</CopyCode></li>
@@ -395,7 +394,14 @@ ls install.sh`}</CodeBlock>
             <li><strong>Admin e-mail</strong> — voor het <InfoTooltip text="Versleutelde verbinding (https) zodat data veilig verstuurd wordt. Let's Encrypt geeft gratis SSL-certificaten uit." /> certificaat</li>
             <li><strong>Database wachtwoord</strong> — kies iets sterks, je hebt dit later nodig</li>
             <li><strong>Dashboard wachtwoord</strong> — voor Supabase Studio (admin paneel)</li>
+            <li><strong>GitHub repo URL</strong> — de SSH URL van je <strong>app-project</strong> (niet de infra-repo!)</li>
           </ul>
+
+          <Tip>
+            Het script detecteert automatisch of je app een <strong>SPA</strong> (Vite + React) of <strong>SSR</strong> (TanStack Start) project is 
+            en kiest het juiste Dockerfile. Je hoeft hier niets voor te configureren.
+          </Tip>
+
           <p className="mt-2">Het script doet de rest: het detecteert automatisch of je {distro === "debian" ? "Ubuntu/Debian" : "CentOS/AlmaLinux/Rocky"} draait en installeert de juiste packages ({distro === "debian" ? "apt" : "dnf"}), <InfoTooltip text="Software die in een afgesloten 'doos' draait, zodat het overal hetzelfde werkt — ongeacht het besturingssysteem." />, secrets genereren, containers starten, <InfoTooltip text="Webserver die bezoekers doorstuurt naar de juiste service (reverse proxy)." /> + SSL en firewall ({distro === "debian" ? "UFW" : "firewalld"}).</p>
           <Warn>Het script zet <CopyCode fill={fill}>GOTRUE_MAILER_AUTOCONFIRM: true</CopyCode>. Dit bevestigt e-mailadressen automatisch zonder verificatie-email. Voor productie: stel <InfoTooltip text="Protocol voor het versturen van e-mails — nodig voor verificatie-mails en wachtwoord-reset." /> in (stap {steps.findIndex(s => s.id === "smtp-oauth") + 1}) en zet dit op <CopyCode fill={fill}>false</CopyCode>.</Warn>
         </Step>
