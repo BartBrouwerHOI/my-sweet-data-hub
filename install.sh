@@ -437,7 +437,19 @@ start_supabase() {
   cd "$SUPABASE_DIR"
   docker compose up -d
   log_info "Wachten tot database klaar is..."
-  sleep 15
+  local max_wait=30
+  local waited=0
+  while [ $waited -lt $max_wait ]; do
+    if docker exec supabase-db pg_isready -U postgres >/dev/null 2>&1; then
+      log_info "Database is klaar (na ${waited}s)"
+      break
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  if [ $waited -ge $max_wait ]; then
+    log_warn "Database niet klaar na ${max_wait}s — ga toch door"
+  fi
 }
 
 start_frontend() {
