@@ -379,7 +379,17 @@ git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
 
 # Start de installer
 cd /opt/lovable-app
-sudo bash install.sh`}</CodeBlock>
+
+# Controleer of install.sh aanwezig is
+ls install.sh`}</CodeBlock>
+          <Warn>
+            <strong>install.sh niet gevonden?</strong> Dan is het bestand waarschijnlijk niet mee-gepusht naar GitHub. Controleer in je GitHub repo of <CopyCode fill={fill}>install.sh</CopyCode> in de root staat. Zo niet:
+            <ul className="list-inside list-disc mt-1 space-y-1">
+              <li>Ga naar Lovable → Connectors → GitHub en controleer of de sync actief is</li>
+              <li>Of download handmatig: <CopyCode fill={fill}>{`curl -O https://raw.githubusercontent.com/JOUW-USER/JOUW-REPO/main/install.sh`}</CopyCode></li>
+            </ul>
+            Als het bestand er wél is, start de installer: <CopyCode fill={fill}>sudo bash install.sh</CopyCode>
+          </Warn>
           <Tip>
             <strong>JOUW-USER</strong> = je GitHub gebruikersnaam (bijv. <CopyCode fill={fill}>jandevries</CopyCode>)<br />
             <strong>JOUW-REPO</strong> = de naam van je repository (bijv. <CopyCode fill={fill}>mijn-app</CopyCode>)<br />
