@@ -414,23 +414,16 @@ sudo bash /opt/lovable-infra/install.sh`}</CodeBlock>
           <p>Op Server A draai je de volledige Supabase stack (database, login, API, opslag):</p>
           <Warn>Gebruik <strong>niet</strong> <CopyCode fill={fill}>sudo git clone</CopyCode> — sudo draait als root en heeft geen toegang tot jouw SSH key.</Warn>
           <CodeBlock fill={fill}>{`# Maak de map aan en geef jezelf rechten
-sudo mkdir -p /opt/lovable-app
-sudo chown $USER:$USER /opt/lovable-app
+sudo mkdir -p /opt/lovable-infra
+sudo chown $USER:$USER /opt/lovable-infra
 
-# Clone als huidige gebruiker
-git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
+# Clone de infra-repo (dit project)
+git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-infra
 
-# Ga naar de gekloonde map
-cd /opt/lovable-app
-
-# Controleer of install.sh aanwezig is
-ls install.sh
-
-# Start de installer (als install.sh gevonden is)
-sudo bash install.sh
+# Start de installer
+sudo bash /opt/lovable-infra/install.sh
 
 # Kies: 2) Alleen database (Supabase stack)`}</CodeBlock>
-          <InstallShMissing fill={fill} />
           <p>Het script start alle Supabase containers en <InfoTooltip text="API Gateway — controleert of API-verzoeken een geldige sleutel hebben voordat ze worden doorgestuurd naar de juiste service." /> (API Gateway op poort 8000).</p>
 
           <h4 className="mt-4 font-semibold text-foreground"><InfoTooltip text="Bepaalt welke poorten open of dicht staan op je server — beschermt tegen ongewenste toegang van buitenaf." /> instellen</h4>
@@ -459,25 +452,18 @@ sudo firewall-cmd --reload`}</CodeBlock>
           <Location icon="terminal" text="Terminal op Server B" />
           <p>Op Server B draait alleen de React app — geen database, geen Supabase services:</p>
           <CodeBlock fill={fill}>{`# Maak de map aan en geef jezelf rechten
-sudo mkdir -p /opt/lovable-app
-sudo chown $USER:$USER /opt/lovable-app
+sudo mkdir -p /opt/lovable-infra
+sudo chown $USER:$USER /opt/lovable-infra
 
-# Clone als huidige gebruiker
-git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
+# Clone de infra-repo (dit project)
+git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-infra
 
-# Ga naar de gekloonde map
-cd /opt/lovable-app
-
-# Controleer of install.sh aanwezig is
-ls install.sh
-
-# Start de installer (als install.sh gevonden is)
-sudo bash install.sh
+# Start de installer
+sudo bash /opt/lovable-infra/install.sh
 
 # Kies: 3) Alleen frontend
 # Voer het IP-adres van Server A in wanneer gevraagd
 # Voer de Anon Key in die je bij Server A hebt genoteerd`}</CodeBlock>
-          <InstallShMissing fill={fill} />
           <p>Het script bouwt de React app als <InfoTooltip text="Software die in een afgesloten 'doos' draait, zodat het overal hetzelfde werkt." />, configureert <InfoTooltip text="Webserver die bezoekers doorstuurt naar de juiste service (reverse proxy)." /> als reverse proxy en regelt SSL.</p>
         </Step>
       )}
