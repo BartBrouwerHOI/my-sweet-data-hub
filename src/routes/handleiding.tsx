@@ -407,7 +407,7 @@ ssh -T -i ~/.ssh/deploy_key git@github.com`}</CodeBlock>
 
           <p><strong>Stap 1:</strong> Clone de <strong>infra-repo</strong> (publiek, geen key nodig):</p>
           <CodeBlock fill={fill}>{`# Clone de infra-repo via HTTPS (geen deploy key nodig)
-git clone INFRA-REPO-URL /opt/lovable-infra`}</CodeBlock>
+sudo git clone INFRA-REPO-URL /opt/lovable-infra`}</CodeBlock>
 
           <p><strong>Stap 2:</strong> Start de installer:</p>
           <CodeBlock fill={fill}>{`sudo bash /opt/lovable-infra/install.sh`}</CodeBlock>
@@ -438,7 +438,7 @@ git clone INFRA-REPO-URL /opt/lovable-infra`}</CodeBlock>
           <Location icon="terminal" text="Terminal op Server A" />
           <p>Op Server A draai je de volledige Supabase stack (database, login, API, opslag):</p>
           <CodeBlock fill={fill}>{`# Clone de infra-repo via HTTPS (geen deploy key nodig)
-git clone INFRA-REPO-URL /opt/lovable-infra
+sudo git clone INFRA-REPO-URL /opt/lovable-infra
 
 # Start de installer
 sudo bash /opt/lovable-infra/install.sh`}</CodeBlock>
@@ -477,7 +477,7 @@ sudo firewall-cmd --reload`}</CodeBlock>
           <Location icon="terminal" text="Terminal op Server B" />
           <p>Op Server B draait alleen de React app — geen database, geen Supabase services:</p>
           <CodeBlock fill={fill}>{`# Clone de infra-repo via HTTPS (geen deploy key nodig)
-git clone INFRA-REPO-URL /opt/lovable-infra
+sudo git clone INFRA-REPO-URL /opt/lovable-infra
 
 # Start de installer
 sudo bash /opt/lovable-infra/install.sh`}</CodeBlock>
@@ -667,7 +667,7 @@ GOTRUE_EXTERNAL_GOOGLE_SECRET=jouw-secret
 GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=https://jouw-domein.nl/auth/v1/callback
 
 # Herstart auth
-cd /opt/supabase && docker compose restart auth`}</CodeBlock>
+cd /opt/supabase && sudo docker compose restart auth`}</CodeBlock>
         </div>
       </Step>
 
@@ -725,10 +725,10 @@ docker exec -i supabase-db psql -U supabase -d postgres < /opt/backups/backup_20
 sudo crontab -e
 
 # Voeg deze regel toe (dagelijkse backup om 3:00 's nachts):
-0 3 * * * mkdir -p /opt/backups && docker exec supabase-db pg_dump -U supabase -Fc postgres > /opt/backups/db_$(date +\\%Y\\%m\\%d).dump 2>&1`}</CodeBlock>
+0 3 * * * mkdir -p /opt/backups && sudo docker exec supabase-db pg_dump -U supabase -Fc postgres > /opt/backups/db_$(date +\\%Y\\%m\\%d).dump 2>&1`}</CodeBlock>
 
           <CodeBlock fill={fill} title="Storage backup (geüploade bestanden)">{`# Supabase Storage bestanden backuppen
-tar -czf /opt/backups/storage_backup_$(date +%Y%m%d).tar.gz /opt/supabase/volumes/storage/`}</CodeBlock>
+sudo tar -czf /opt/backups/storage_backup_$(date +%Y%m%d).tar.gz /opt/supabase/volumes/storage/`}</CodeBlock>
         </div>
 
         <Tip>Bewaar backups op een andere locatie — gebruik <CopyCode fill={fill}>rsync</CopyCode> of <InfoTooltip text="Bestanden kopiëren tussen je computer en een server via SSH." /> naar een andere Proxmox VM of externe opslag.</Tip>
