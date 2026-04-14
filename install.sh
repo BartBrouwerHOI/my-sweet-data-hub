@@ -301,16 +301,22 @@ start_frontend() {
 configure_nginx() {
   log_info "Nginx configureren..."
 
-  local server_name
+  local server_name nginx_conf_path
   if [[ -n "$DOMAIN" ]]; then
     server_name="$DOMAIN"
   else
     server_name="_"
   fi
 
+  # Distro-specifiek pad
+  if [[ "$DISTRO_FAMILY" == "rhel" ]]; then
+    nginx_conf_path="/etc/nginx/conf.d/lovable.conf"
+  else
+    nginx_conf_path="/etc/nginx/sites-available/lovable"
+  fi
+
   if [[ "$INSTALL_MODE" == "frontend" ]]; then
-    # Frontend-only: proxy naar frontend container, API naar database-server
-    cat > /etc/nginx/sites-available/lovable <<NGINXEOF
+    cat > "$nginx_conf_path" <<NGINXEOF
 server {
     listen 80;
     server_name $server_name;
@@ -352,8 +358,7 @@ server {
 }
 NGINXEOF
   elif [[ "$INSTALL_MODE" == "database" ]]; then
-    # Database-only: geen frontend proxy, alleen API
-    cat > /etc/nginx/sites-available/lovable <<NGINXEOF
+    cat > "$nginx_conf_path" <<NGINXEOF
 server {
     listen 80;
     server_name $server_name;
@@ -366,8 +371,7 @@ server {
 }
 NGINXEOF
   else
-    # Full: alles via Kong (API Gateway)
-    cat > /etc/nginx/sites-available/lovable <<NGINXEOF
+    cat > "$nginx_conf_path" <<NGINXEOF
 server {
     listen 80;
     server_name $server_name;
@@ -418,8 +422,12 @@ server {
 NGINXEOF
   fi
 
-  ln -sf /etc/nginx/sites-available/lovable /etc/nginx/sites-enabled/lovable
-  rm -f /etc/nginx/sites-enabled/default
+  # Symlink voor Debian/Ubuntu
+  if [[ "$DISTRO_FAMILY" == "debian" ]]; then
+    ln -sf /etc/nginx/sites-available/lovable /etc/nginx/sites-enabled/lovable
+    rm -f /etc/nginx/sites-enabled/default
+  fi
+
   nginx -t && systemctl reload nginx
 }
 
@@ -438,19 +446,39 @@ setup_ssl() {
 # --- Firewall ---
 configure_firewall() {
   log_info "Firewall configureren..."
-  ufw --force enable
-  ufw allow ssh
-  ufw allow http
-  ufw allow https
 
-  if [[ "$INSTALL_MODE" == "database" ]]; then
-    log_info "Database-modus: poort 8000 (Kong) openzetten..."
-    ufw allow 8000
-    log_warn "Beperk poort 8000 tot je frontend-server IP voor betere beveiliging:"
-    log_warn "  ufw delete allow 8000 && ufw allow from FRONTEND_IP to any port 8000"
+  if [[ "$DISTRO_FAMILY" == "rhel" ]]; then
+    # firewalld (CentOS/AlmaLinux/Rocky)
+    systemctl enable --now firewalld
+    firewall-cmd --permanent --add-service=ssh
+    firewall-cmd --permanent --add-service=http
+    firewall-cmd --permanent --add-service=https
+
+    if [[ "$INSTALL_MODE" == "database" ]]; then
+      log_info "Database-modus: poort 8000 (Kong) openzetten..."
+      firewall-cmd --permanent --add-port=8000/tcp
+      log_warn "Beperk poort 8000 tot je frontend-server IP voor betere beveiliging:"
+      log_warn "  firewall-cmd --permanent --remove-port=8000/tcp"
+      log_warn "  firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address=FRONTEND_IP port port=8000 protocol=tcp accept'"
+    fi
+
+    firewall-cmd --reload
+  else
+    # ufw (Ubuntu/Debian)
+    ufw --force enable
+    ufw allow ssh
+    ufw allow http
+    ufw allow https
+
+    if [[ "$INSTALL_MODE" == "database" ]]; then
+      log_info "Database-modus: poort 8000 (Kong) openzetten..."
+      ufw allow 8000
+      log_warn "Beperk poort 8000 tot je frontend-server IP voor betere beveiliging:"
+      log_warn "  ufw delete allow 8000 && ufw allow from FRONTEND_IP to any port 8000"
+    fi
+
+    ufw reload
   fi
-
-  ufw reload
 }
 
 # --- Create update script ---
