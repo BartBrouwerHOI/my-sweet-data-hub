@@ -299,6 +299,9 @@ function HandleidingPage() {
         <CodeBlock fill={fill} title="1. SSH key genereren">{`# Genereer een nieuwe SSH key (druk Enter bij alle vragen)
 ssh-keygen -t ed25519 -C "deploy@vps" -f ~/.ssh/deploy_key -N ""
 
+# Stel de juiste permissions in (sommige SSH-versies weigeren te brede rechten)
+chmod 600 ~/.ssh/deploy_key
+
 # Toon de publieke key — kopieer de hele output
 cat ~/.ssh/deploy_key.pub`}</CodeBlock>
 
@@ -318,11 +321,47 @@ Host github.com
   IdentityFile ~/.ssh/deploy_key
   IdentitiesOnly yes
 EOF
-chmod 600 ~/.ssh/config
+chmod 600 ~/.ssh/config`}</CodeBlock>
 
-# Test de verbinding
-ssh -T git@github.com`}</CodeBlock>
-        <Tip>Je zou moeten zien: <CopyCode fill={fill}>"Hi username! You've successfully authenticated"</CopyCode>. Het woord "username" is je GitHub-gebruikersnaam.</Tip>
+        <Warn>
+          Als je al andere SSH keys hebt (bijv. <CopyCode fill={fill}>id_ed25519</CopyCode> of <CopyCode fill={fill}>id_rsa</CopyCode>), kan SSH die per ongeluk gebruiken in plaats van je deploy key. 
+          De regel <CopyCode fill={fill}>IdentitiesOnly yes</CopyCode> in de config hierboven voorkomt dit. Controleer met: <CopyCode fill={fill}>ls ~/.ssh/*.pub</CopyCode>
+        </Warn>
+
+        <CodeBlock fill={fill} title="3. Verbinding testen">{`# Test de verbinding — bekijk welke key SSH aanbiedt
+ssh -vT git@github.com 2>&1 | grep "Offering\\|authenticated"
+
+# Als bovenstaande niet werkt, forceer de deploy key:
+ssh -T -i ~/.ssh/deploy_key git@github.com`}</CodeBlock>
+
+        <div className="rounded-lg border border-border overflow-hidden text-sm">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-muted/50">
+                <th className="px-3 py-2 text-left font-medium">Foutmelding</th>
+                <th className="px-3 py-2 text-left font-medium">Betekenis</th>
+                <th className="px-3 py-2 text-left font-medium">Oplossing</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-t border-border">
+                <td className="px-3 py-2 font-mono text-xs">"Hi USERNAME! You've successfully authenticated"</td>
+                <td className="px-3 py-2 text-green-600 dark:text-green-400">✅ Alles werkt</td>
+                <td className="px-3 py-2">Ga door naar de clone stap</td>
+              </tr>
+              <tr className="border-t border-border">
+                <td className="px-3 py-2 font-mono text-xs">"Repository not found"</td>
+                <td className="px-3 py-2">SSH werkt, maar de key heeft geen toegang tot deze repo</td>
+                <td className="px-3 py-2">Controleer of de deploy key aan de <strong>juiste repo</strong> is toegevoegd op GitHub</td>
+              </tr>
+              <tr className="border-t border-border">
+                <td className="px-3 py-2 font-mono text-xs">"Permission denied (publickey)"</td>
+                <td className="px-3 py-2">SSH kan helemaal niet authenticeren</td>
+                <td className="px-3 py-2">De key wordt niet gevonden — controleer <CopyCode fill={fill}>~/.ssh/config</CopyCode> en <CopyCode fill={fill}>chmod 600</CopyCode></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </Step>
 
       {/* === SINGLE MODE: Installatie === */}
