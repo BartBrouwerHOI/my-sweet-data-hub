@@ -15,9 +15,11 @@ export const Route = createFileRoute("/handleiding")({
 });
 
 type SetupMode = "single" | "split";
+type Distro = "debian" | "rhel";
 
 function HandleidingPage() {
   const [mode, setMode] = useState<SetupMode>("single");
+  const [distro, setDistro] = useState<Distro>("debian");
 
   const singleSteps = [
     { id: "vereisten", title: "Vereisten" },
@@ -100,6 +102,40 @@ function HandleidingPage() {
         </p>
       </div>
 
+      {/* Distro toggle */}
+      <div className="mb-10 rounded-lg border border-border bg-muted/50 p-4">
+        <p className="mb-3 text-sm font-medium text-foreground">
+          Welke Linux distributie draai je? <InfoTooltip text="Het install-script detecteert dit automatisch, maar de handleiding toont de juiste commando's op basis van je keuze hier." />
+        </p>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setDistro("debian")}
+            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+              distro === "debian"
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:bg-muted/80"
+            }`}
+          >
+            Ubuntu / Debian
+          </button>
+          <button
+            onClick={() => setDistro("rhel")}
+            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+              distro === "rhel"
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:bg-muted/80"
+            }`}
+          >
+            CentOS / AlmaLinux / Rocky
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {distro === "debian"
+            ? "Gebruikt apt, ufw, en /etc/nginx/sites-available/. Aanbevolen: Ubuntu 22.04+ of Debian 11+."
+            : "Gebruikt dnf, firewalld, en /etc/nginx/conf.d/. Ondersteund: CentOS Stream 9, AlmaLinux 9, Rocky Linux 9."}
+        </p>
+      </div>
+
       {/* Table of contents */}
       <nav className="mb-12 rounded-lg border border-border bg-muted/50 p-5">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Inhoud</h2>
@@ -118,11 +154,11 @@ function HandleidingPage() {
         <ul className="list-inside list-disc space-y-1">
           <li><strong>Proxmox host</strong> met voldoende resources</li>
           {mode === "single" ? (
-            <li><strong>Ubuntu 24.04 VM</strong> — minimaal 4GB RAM, 2 vCPU, 20GB disk</li>
+            <li><strong>{distro === "debian" ? "Ubuntu 24.04" : "AlmaLinux 9 / Rocky Linux 9 / CentOS Stream 9"} VM</strong> — minimaal 4GB RAM, 2 vCPU, 20GB disk</li>
           ) : (
             <>
-              <li><strong>Ubuntu 24.04 VM (Server A)</strong> — minimaal 2GB RAM, 2 vCPU, 20GB disk — voor Supabase</li>
-              <li><strong>Ubuntu 24.04 VM (Server B)</strong> — minimaal 2GB RAM, 2 vCPU, 10GB disk — voor de frontend</li>
+              <li><strong>{distro === "debian" ? "Ubuntu 24.04" : "AlmaLinux 9 / Rocky Linux 9"} VM (Server A)</strong> — minimaal 2GB RAM, 2 vCPU, 20GB disk — voor Supabase</li>
+              <li><strong>{distro === "debian" ? "Ubuntu 24.04" : "AlmaLinux 9 / Rocky Linux 9"} VM (Server B)</strong> — minimaal 2GB RAM, 2 vCPU, 10GB disk — voor de frontend</li>
             </>
           )}
           <li><strong><InfoTooltip text="Veilige verbinding met je server op afstand, zoals remote desktop maar dan via tekst." />-toegang</strong> tot de VM{mode === "split" ? "'s" : ""}</li>
@@ -258,7 +294,7 @@ sudo bash install.sh`}</CodeBlock>
             <li><strong>Database wachtwoord</strong> — kies iets sterks, je hebt dit later nodig</li>
             <li><strong>Dashboard wachtwoord</strong> — voor Supabase Studio (admin paneel)</li>
           </ul>
-          <p className="mt-2">Het script doet de rest: <InfoTooltip text="Software die in een afgesloten 'doos' draait, zodat het overal hetzelfde werkt — ongeacht het besturingssysteem." /> installeren, secrets genereren, containers starten, <InfoTooltip text="Webserver die bezoekers doorstuurt naar de juiste service (reverse proxy)." /> + SSL configureren.</p>
+          <p className="mt-2">Het script doet de rest: het detecteert automatisch of je {distro === "debian" ? "Ubuntu/Debian" : "CentOS/AlmaLinux/Rocky"} draait en installeert de juiste packages ({distro === "debian" ? "apt" : "dnf"}), <InfoTooltip text="Software die in een afgesloten 'doos' draait, zodat het overal hetzelfde werkt — ongeacht het besturingssysteem." />, secrets genereren, containers starten, <InfoTooltip text="Webserver die bezoekers doorstuurt naar de juiste service (reverse proxy)." /> + SSL en firewall ({distro === "debian" ? "UFW" : "firewalld"}).</p>
           <Warn>Het script zet <code className="rounded bg-muted px-1.5 py-0.5 text-sm">GOTRUE_MAILER_AUTOCONFIRM: true</code>. Dit bevestigt e-mailadressen automatisch zonder verificatie-email. Voor productie: stel <InfoTooltip text="Protocol voor het versturen van e-mails — nodig voor verificatie-mails en wachtwoord-reset." /> in (stap {steps.findIndex(s => s.id === "smtp-oauth") + 1}) en zet dit op <code className="rounded bg-muted px-1.5 py-0.5 text-sm">false</code>.</Warn>
         </Step>
       )}
@@ -280,9 +316,16 @@ sudo bash install.sh
 
           <h4 className="mt-4 font-semibold text-foreground"><InfoTooltip text="Bepaalt welke poorten open of dicht staan op je server — beschermt tegen ongewenste toegang van buitenaf." /> instellen</h4>
           <p>Beperk toegang tot de API Gateway zodat alleen Server B erbij kan:</p>
-          <CodeBlock>{`# Vervang SERVER_B_IP met het IP-adres van je frontend-server
+          {distro === "debian" ? (
+            <CodeBlock>{`# Vervang SERVER_B_IP met het IP-adres van je frontend-server
 # Voorbeeld: sudo ufw allow from 192.168.1.20 to any port 8000
 sudo ufw allow from SERVER_B_IP to any port 8000`}</CodeBlock>
+          ) : (
+            <CodeBlock>{`# Vervang SERVER_B_IP met het IP-adres van je frontend-server
+# Voorbeeld: sudo firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address=192.168.1.20 port port=8000 protocol=tcp accept'
+sudo firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address=SERVER_B_IP port port=8000 protocol=tcp accept'
+sudo firewall-cmd --reload`}</CodeBlock>
+          )}
           <Warn>
             <strong>Belangrijk!</strong> Noteer de <strong><InfoTooltip text="Publieke sleutel waarmee de frontend met de Supabase API praat. Dit is geen geheim — hij wordt in de browser gebruikt." /></strong> die het script aan het einde toont — 
             die heb je nodig bij het installeren van Server B. Je vindt deze ook terug in <code className="rounded bg-muted px-1.5 py-0.5 text-xs">/opt/supabase/credentials.txt</code>.
@@ -468,7 +511,7 @@ cd /opt/supabase && docker compose restart auth`}</CodeBlock>
         <div className="space-y-4">
           <TroubleItem q="Container start niet op" a={`Check logs: docker logs supabase-db (of andere containernaam). Vaak een verkeerd wachtwoord of poort-conflict.`} />
           <TroubleItem q="Frontend laadt niet" a="Check of de container draait: docker ps. Test lokaal: curl http://localhost:3000. Check Nginx config: sudo nginx -t" />
-          <TroubleItem q="SSL werkt niet" a="Controleer of poort 80 en 443 open staan in Proxmox firewall én UFW. Draai opnieuw: sudo certbot --nginx -d jouw-domein.nl" />
+          <TroubleItem q="SSL werkt niet" a={distro === "debian" ? "Controleer of poort 80 en 443 open staan in Proxmox firewall én UFW. Draai opnieuw: sudo certbot --nginx -d jouw-domein.nl" : "Controleer of poort 80 en 443 open staan in Proxmox firewall én firewalld (sudo firewall-cmd --list-all). Draai opnieuw: sudo certbot --nginx -d jouw-domein.nl"} />
           <TroubleItem q="Database connectie mislukt" a={`Check of PostgreSQL draait: docker exec supabase-db pg_isready -U supabase.${mode === "split" ? " Bij split: check of poort 8000 open staat op Server A met: curl http://SERVER_A_IP:8000/rest/v1/" : ""}`} />
           <TroubleItem q="Git pull mislukt" a="Check deploy key: ssh -T git@github.com. Controleer ~/.ssh/config. Zorg dat de deploy key op GitHub staat." />
           <TroubleItem q="Supabase API geeft 401" a="Controleer of ANON_KEY in .env.production (frontend) overeenkomt met de key in /opt/supabase/.env (backend). Deze moeten exact gelijk zijn." />

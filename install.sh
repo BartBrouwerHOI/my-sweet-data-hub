@@ -16,6 +16,9 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+DISTRO_FAMILY=""  # "debian" or "rhel"
+DISTRO_ID=""
+
 INSTALL_MODE=""
 GITHUB_REPO=""
 DOMAIN=""
@@ -48,15 +51,36 @@ log_info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
+# --- Detect Linux distro ---
+detect_distro() {
+  if [[ -f /etc/os-release ]]; then
+    DISTRO_ID=$(. /etc/os-release && echo "$ID")
+  else
+    log_error "Kan /etc/os-release niet lezen. Welk besturingssysteem gebruik je?"
+    exit 1
+  fi
+
+  case "$DISTRO_ID" in
+    ubuntu|debian)
+      DISTRO_FAMILY="debian"
+      log_info "Gedetecteerd: $DISTRO_ID (Debian-familie — apt/ufw)"
+      ;;
+    centos|almalinux|rocky|rhel|fedora)
+      DISTRO_FAMILY="rhel"
+      log_info "Gedetecteerd: $DISTRO_ID (RHEL-familie — dnf/firewalld)"
+      ;;
+    *)
+      log_warn "Onbekende distro: $DISTRO_ID. Probeer als Debian-familie..."
+      DISTRO_FAMILY="debian"
+      ;;
+  esac
+}
+
 # --- Pre-flight checks ---
 check_requirements() {
   if [[ $EUID -ne 0 ]]; then
     log_error "Dit script moet als root gedraaid worden. Gebruik: sudo bash install.sh"
     exit 1
-  fi
-
-  if ! grep -qi "ubuntu" /etc/os-release 2>/dev/null; then
-    log_warn "Dit script is ontworpen voor Ubuntu 24. Andere distro's kunnen problemen geven."
   fi
 
   local mem_mb
@@ -115,8 +139,15 @@ gather_input() {
 # --- Install system dependencies ---
 install_dependencies() {
   log_info "Systeem updaten en dependencies installeren..."
-  apt-get update -qq
-  apt-get install -y -qq curl git nginx certbot python3-certbot-nginx ufw jq openssl
+
+  if [[ "$DISTRO_FAMILY" == "debian" ]]; then
+    apt-get update -qq
+    apt-get install -y -qq curl git nginx certbot python3-certbot-nginx ufw jq openssl
+  elif [[ "$DISTRO_FAMILY" == "rhel" ]]; then
+    dnf install -y -q epel-release
+    dnf install -y -q curl git nginx certbot certbot-nginx firewalld jq openssl
+    systemctl enable --now firewalld
+  fi
 
   if ! command -v docker &>/dev/null; then
     log_info "Docker installeren..."
@@ -129,7 +160,11 @@ install_dependencies() {
 
   if ! docker compose version &>/dev/null; then
     log_info "Docker Compose plugin installeren..."
-    apt-get install -y -qq docker-compose-plugin
+    if [[ "$DISTRO_FAMILY" == "debian" ]]; then
+      apt-get install -y -qq docker-compose-plugin
+    elif [[ "$DISTRO_FAMILY" == "rhel" ]]; then
+      dnf install -y -q docker-compose-plugin
+    fi
   fi
 }
 
@@ -266,16 +301,22 @@ start_frontend() {
 configure_nginx() {
   log_info "Nginx configureren..."
 
-  local server_name
+  local server_name nginx_conf_path
   if [[ -n "$DOMAIN" ]]; then
     server_name="$DOMAIN"
   else
     server_name="_"
   fi
 
+  # Distro-specifiek pad
+  if [[ "$DISTRO_FAMILY" == "rhel" ]]; then
+    nginx_conf_path="/etc/nginx/conf.d/lovable.conf"
+  else
+    nginx_conf_path="/etc/nginx/sites-available/lovable"
+  fi
+
   if [[ "$INSTALL_MODE" == "frontend" ]]; then
-    # Frontend-only: proxy naar frontend container, API naar database-server
-    cat > /etc/nginx/sites-available/lovable <<NGINXEOF
+    cat > "$nginx_conf_path" <<NGINXEOF
 server {
     listen 80;
     server_name $server_name;
@@ -317,8 +358,7 @@ server {
 }
 NGINXEOF
   elif [[ "$INSTALL_MODE" == "database" ]]; then
-    # Database-only: geen frontend proxy, alleen API
-    cat > /etc/nginx/sites-available/lovable <<NGINXEOF
+    cat > "$nginx_conf_path" <<NGINXEOF
 server {
     listen 80;
     server_name $server_name;
@@ -331,8 +371,7 @@ server {
 }
 NGINXEOF
   else
-    # Full: alles via Kong (API Gateway)
-    cat > /etc/nginx/sites-available/lovable <<NGINXEOF
+    cat > "$nginx_conf_path" <<NGINXEOF
 server {
     listen 80;
     server_name $server_name;
@@ -383,8 +422,12 @@ server {
 NGINXEOF
   fi
 
-  ln -sf /etc/nginx/sites-available/lovable /etc/nginx/sites-enabled/lovable
-  rm -f /etc/nginx/sites-enabled/default
+  # Symlink voor Debian/Ubuntu
+  if [[ "$DISTRO_FAMILY" == "debian" ]]; then
+    ln -sf /etc/nginx/sites-available/lovable /etc/nginx/sites-enabled/lovable
+    rm -f /etc/nginx/sites-enabled/default
+  fi
+
   nginx -t && systemctl reload nginx
 }
 
@@ -403,19 +446,39 @@ setup_ssl() {
 # --- Firewall ---
 configure_firewall() {
   log_info "Firewall configureren..."
-  ufw --force enable
-  ufw allow ssh
-  ufw allow http
-  ufw allow https
 
-  if [[ "$INSTALL_MODE" == "database" ]]; then
-    log_info "Database-modus: poort 8000 (Kong) openzetten..."
-    ufw allow 8000
-    log_warn "Beperk poort 8000 tot je frontend-server IP voor betere beveiliging:"
-    log_warn "  ufw delete allow 8000 && ufw allow from FRONTEND_IP to any port 8000"
+  if [[ "$DISTRO_FAMILY" == "rhel" ]]; then
+    # firewalld (CentOS/AlmaLinux/Rocky)
+    systemctl enable --now firewalld
+    firewall-cmd --permanent --add-service=ssh
+    firewall-cmd --permanent --add-service=http
+    firewall-cmd --permanent --add-service=https
+
+    if [[ "$INSTALL_MODE" == "database" ]]; then
+      log_info "Database-modus: poort 8000 (Kong) openzetten..."
+      firewall-cmd --permanent --add-port=8000/tcp
+      log_warn "Beperk poort 8000 tot je frontend-server IP voor betere beveiliging:"
+      log_warn "  firewall-cmd --permanent --remove-port=8000/tcp"
+      log_warn "  firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address=FRONTEND_IP port port=8000 protocol=tcp accept'"
+    fi
+
+    firewall-cmd --reload
+  else
+    # ufw (Ubuntu/Debian)
+    ufw --force enable
+    ufw allow ssh
+    ufw allow http
+    ufw allow https
+
+    if [[ "$INSTALL_MODE" == "database" ]]; then
+      log_info "Database-modus: poort 8000 (Kong) openzetten..."
+      ufw allow 8000
+      log_warn "Beperk poort 8000 tot je frontend-server IP voor betere beveiliging:"
+      log_warn "  ufw delete allow 8000 && ufw allow from FRONTEND_IP to any port 8000"
+    fi
+
+    ufw reload
   fi
-
-  ufw reload
 }
 
 # --- Create update script ---
@@ -520,6 +583,7 @@ CREDEOF
 # === Main ===
 main() {
   print_banner
+  detect_distro
   select_mode
   check_requirements
   gather_input
