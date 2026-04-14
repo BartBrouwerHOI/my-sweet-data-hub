@@ -499,13 +499,13 @@ sudo bash /opt/lovable-infra/install.sh`}</CodeBlock>
           <>
             <Location icon="terminal" text="Terminal op je VM" />
             <CodeBlock fill={fill}>{`# Bekijk alle draaiende containers (je zou 8+ containers moeten zien)
-docker ps
+sudo docker ps
 
 # Test of de frontend reageert
 curl -I http://localhost:3000
 
 # Je credentials opzoeken:
-cat /opt/supabase/credentials.txt`}</CodeBlock>
+sudo cat /opt/supabase/credentials.txt`}</CodeBlock>
 
             <p className="mt-3"><strong>API testen:</strong> Kopieer de <strong>Anon Key</strong> uit de output hierboven en plak die in het volgende commando:</p>
             <CodeBlock fill={fill}>{`# Vervang <ANON_KEY> met de key uit credentials.txt
@@ -521,10 +521,10 @@ https://jouw-domein.nl:8080   → Supabase Studio (admin paneel)`}</CodeBlock>
           <>
             <Location icon="terminal" text="Terminal op Server A (backend)" />
             <CodeBlock fill={fill}>{`# Controleer of alle Supabase containers draaien
-docker ps
+sudo docker ps
 
 # Credentials opzoeken:
-cat /opt/supabase/credentials.txt`}</CodeBlock>
+sudo cat /opt/supabase/credentials.txt`}</CodeBlock>
 
             <p className="mt-3"><strong>API testen:</strong> Kopieer de <strong>Anon Key</strong> uit de output hierboven:</p>
             <CodeBlock fill={fill}>{`# Vervang <ANON_KEY> met de key uit credentials.txt
@@ -705,13 +705,13 @@ cd /opt/supabase && sudo docker compose restart auth`}</CodeBlock>
 sudo mkdir -p /opt/backups
 
 # Volledige backup
-docker exec supabase-db pg_dump -U supabase postgres > /opt/backups/backup_$(date +%Y%m%d).sql
+sudo docker exec supabase-db pg_dump -U supabase postgres > /opt/backups/backup_$(date +%Y%m%d).sql
 
 # Backup met compressie (kleiner bestand)
-docker exec supabase-db pg_dump -U supabase -Fc postgres > /opt/backups/backup_$(date +%Y%m%d).dump
+sudo docker exec supabase-db pg_dump -U supabase -Fc postgres > /opt/backups/backup_$(date +%Y%m%d).dump
 
 # Restore (terugzetten)
-docker exec -i supabase-db psql -U supabase -d postgres < /opt/backups/backup_20240101.sql`}</CodeBlock>
+sudo docker exec -i supabase-db psql -U supabase -d postgres < /opt/backups/backup_20240101.sql`}</CodeBlock>
         </div>
 
         <div className="mt-4 rounded-lg border border-border bg-muted/30 p-4">
