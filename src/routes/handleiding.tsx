@@ -534,7 +534,7 @@ curl http://localhost:8000/rest/v1/ -H "apikey: <ANON_KEY>"
 
             <Location icon="terminal" text="Terminal op Server B (frontend)" />
             <CodeBlock fill={fill}>{`# Controleer of de frontend draait
-docker ps
+sudo docker ps
 curl -I http://localhost:3000`}</CodeBlock>
 
             <Location icon="browser" text="Browser op je eigen computer" />
@@ -552,7 +552,7 @@ curl -I http://localhost:3000`}</CodeBlock>
           <>
             <Location icon="terminal" text="Terminal op je VM" />
             <CodeBlock fill={fill}>{`# Eén commando om alles te updaten:
-lovable-update
+sudo lovable-update
 
 # Dit doet:
 # 1. git pull in /opt/lovable-infra (infra-updates)
@@ -565,12 +565,12 @@ lovable-update
           <>
             <Location icon="terminal" text="Terminal op Server B (frontend)" />
             <CodeBlock fill={fill}>{`# Update de frontend:
-lovable-update
+sudo lovable-update
 
 # Dit doet: git pull → docker build → restart container`}</CodeBlock>
             <Location icon="terminal" text="Terminal op Server A (alleen bij database-wijzigingen)" />
             <CodeBlock fill={fill}>{`# Update de backend (incl. migraties):
-lovable-update
+sudo lovable-update
 
 # Dit doet: git pull (infra + app) → nieuwe migraties draaien → Supabase herstarten`}</CodeBlock>
             <Tip>Als je bij de installatie van Server A hebt gekozen om de app-repo te clonen voor migraties, wordt deze automatisch mee-geüpdatet door <CopyCode fill={fill}>lovable-update</CopyCode>.</Tip>
@@ -633,7 +633,7 @@ SMTP_SENDER_NAME=Mijn App`}</CodeBlock>
 sudo nano /opt/supabase/docker-compose.yml`}</CodeBlock>
 
           <p>Herstart de auth container:</p>
-          <CodeBlock fill={fill}>{`cd /opt/supabase && docker compose restart auth`}</CodeBlock>
+          <CodeBlock fill={fill}>{`cd /opt/supabase && sudo docker compose restart auth`}</CodeBlock>
           <Tip>Voor Gmail: gebruik een <a href="https://myaccount.google.com/apppasswords" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">App-wachtwoord</a>, niet je gewone wachtwoord. Je hebt 2FA nodig om een App-wachtwoord aan te maken.</Tip>
         </div>
 
