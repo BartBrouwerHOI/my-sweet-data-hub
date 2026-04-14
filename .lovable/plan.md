@@ -1,49 +1,65 @@
 
 
-## Analyse
+## Probleem
 
-De handleiding gaat ervan uit dat de gebruiker als `root` is ingelogd (`ssh root@JOUW-SERVER-IP`), maar in de praktijk loggen veel beheerders in als een gewone gebruiker. Daardoor falen commando's die schrijven naar `/opt/` of Docker aanroepen.
+De database draait, maar mist alle Supabase-specifieke rollen (`anon`, `authenticated`, `authenticator`, `service_role`) en schema's (`auth`, `storage`, `realtime`). Dit komt door twee oorzaken:
 
-**Commando's die `sudo` missen in `handleiding.tsx`:**
+1. **`install.sh` maakt `volumes/db/data` aan vóór de container start** (regel 371). PostgreSQL ziet een niet-lege data directory en slaat alle init scripts over — inclusief de ingebouwde Supabase init scripts uit de image.
 
-| Regel | Commando | Probleem |
-|-------|----------|----------|
-| 409 | `git clone ... /opt/lovable-infra` | Schrijft naar `/opt/` |
-| 440-441 | `git clone ... /opt/lovable-infra` (Server A) | Idem |
-| 479-480 | `git clone ... /opt/lovable-infra` (Server B) | Idem |
-| 501-502 | `docker ps` | Docker vereist sudo of groepslidmaatschap |
-| 505 | `curl -I http://localhost:3000` | OK, geen sudo nodig |
-| 508 | `cat /opt/supabase/credentials.txt` | Bestand is `chmod 600` owned by root |
-| 511-512 | `curl ... -H "apikey: ..."` | OK |
-| 523-524 | `docker ps` (split) | Docker |
-| 527 | `cat /opt/supabase/credentials.txt` (split) | chmod 600 |
-| 530-531 | `curl ...` | OK |
-| 536-538 | `docker ps`, `curl` (Server B) | Docker |
-| 554-555 | `lovable-update` | Draait docker + git pull in /opt/ |
-| 567-568 | `lovable-update` (split frontend) | Idem |
-| 572-573 | `lovable-update` (split backend) | Idem |
-| 636 | `cd /opt/supabase && docker compose restart auth` | Docker + /opt/ |
-| 670 | `cd /opt/supabase && docker compose restart auth` | Idem |
-| 704-714 | Backup: `docker exec ...`, `pg_dump`, restore | Docker |
-| 730-731 | `tar -czf ... /opt/supabase/...` | Leest /opt/ |
+2. **Geen init SQL voor Supabase rollen/schema's** in de infra-repo. De `supabase/postgres` image heeft ingebouwde scripts, maar die draaien alleen als de data directory leeg is bij eerste start.
 
-## Plan
+3. **`realtime` mist `APP_NAME`** environment variabele.
 
-### Bestand: `src/routes/handleiding.tsx`
+## Oplossing
 
-Alle bovenstaande commando's krijgen `sudo` prefix waar nodig:
+### 1. Nieuw bestand: `volumes/db/init/00-supabase-init.sql`
 
-- `git clone ... /opt/lovable-infra` → `sudo git clone ... /opt/lovable-infra`
-- `docker ps` → `sudo docker ps`
-- `cat /opt/supabase/credentials.txt` → `sudo cat /opt/supabase/credentials.txt`
-- `lovable-update` → `sudo lovable-update`
-- `cd /opt/supabase && docker compose restart auth` → `cd /opt/supabase && sudo docker compose restart auth`
-- Backup `docker exec` commando's → `sudo docker exec`
-- `tar -czf` → `sudo tar -czf`
+SQL script dat de essentiële Supabase rollen, schema's, extensions en grants aanmaakt (idempotent met `IF NOT EXISTS`):
 
-Totaal: ~15 commando's aanpassen in de handleiding.
+- **Rollen:** `anon`, `authenticated`, `authenticator`, `service_role`, `supabase_admin`, `dashboard_user`, `supabase_auth_admin`, `supabase_storage_admin`, `supabase_realtime_admin`
+- **Schema's:** `auth`, `storage`, `extensions`, `realtime`, `_realtime`  
+- **Extensions:** `uuid-ossp`, `pgcrypto`, `pgjwt` (in `extensions` schema)
+- **Grants:** juiste schema-eigenaarschap en search_path per rol
 
-### Bestand: `update.sh`
+### 2. `install.sh` aanpassen
 
-Geen wijzigingen nodig — `update.sh` gebruikt al `docker` en `git` commando's die als root draaien (het wordt aangeroepen via `sudo lovable-update`).
+- **Verwijder `mkdir -p volumes/db/data`** (regel 371) — laat Docker/PostgreSQL de data directory zelf aanmaken bij eerste start
+- **Kopieer init SQL** naar `$SUPABASE_DIR/volumes/db/init/` vóór `docker compose up`
+
+### 3. `docker-compose.yml` aanpassen
+
+- Voeg `APP_NAME: supabase_realtime` toe aan de `realtime` service environment
+
+### 4. Handleiding: troubleshooting sectie
+
+Voeg een "Database resetten" stap toe aan de troubleshooting sectie in `handleiding.tsx`:
+
+```bash
+cd /opt/supabase && sudo docker compose down
+sudo rm -rf /opt/supabase/volumes/db/data
+sudo docker compose up -d
+```
+
+## Jouw server nu fixen
+
+Na deze wijzigingen voer je op je server uit:
+
+```bash
+cd /opt/supabase && sudo docker compose down
+sudo rm -rf /opt/supabase/volumes/db/data
+cd /opt/lovable-infra && sudo git pull
+sudo cp /opt/lovable-infra/docker-compose.yml /opt/supabase/docker-compose.yml
+sudo cp /opt/lovable-infra/volumes/db/init/00-supabase-init.sql /opt/supabase/volumes/db/init/
+sudo cp /opt/lovable-infra/volumes/kong/kong.yml /opt/supabase/volumes/kong/kong.yml
+cd /opt/supabase && sudo docker compose up -d
+```
+
+## Bestanden
+
+| Bestand | Wijziging |
+|---|---|
+| `volumes/db/init/00-supabase-init.sql` | **Nieuw** — rollen, schema's, extensions, grants |
+| `docker-compose.yml` | `APP_NAME` toevoegen aan realtime |
+| `install.sh` | Verwijder premature `mkdir volumes/db/data`, kopieer init SQL |
+| `src/routes/handleiding.tsx` | Troubleshooting: database resetten |
 
