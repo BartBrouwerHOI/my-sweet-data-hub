@@ -741,11 +741,12 @@ function StepBadge({ type }: { type: "verplicht" | "aanbevolen" | "optioneel" | 
   return <span className={`ml-2 rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${className}`}>{label}</span>;
 }
 
-function CopyCode({ children }: { children: string }) {
+function CopyCode({ children, fill }: { children: string; fill?: (t: string) => string }) {
   const [copied, setCopied] = useState(false);
+  const displayed = fill ? fill(children) : children;
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(children);
+    await navigator.clipboard.writeText(displayed);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -760,8 +761,23 @@ function CopyCode({ children }: { children: string }) {
       }`}
       title="Klik om te kopiëren"
     >
-      {copied ? "✓ Gekopieerd!" : children}
+      {copied ? "✓ Gekopieerd!" : displayed}
     </code>
+  );
+}
+
+function ConfigInput({ label, placeholder, value, onChange }: { label: string; placeholder: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-medium text-muted-foreground">{label}</label>
+      <input
+        type="text"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring"
+      />
+    </div>
   );
 }
 
