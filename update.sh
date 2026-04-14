@@ -23,7 +23,7 @@ docker rm lovable-frontend 2>/dev/null || true
 docker run -d \
   --name lovable-frontend \
   --restart unless-stopped \
-  -p 3000:80 \
+  -p 3000:3000 \
   lovable-frontend
 
 # Run new migrations if any
