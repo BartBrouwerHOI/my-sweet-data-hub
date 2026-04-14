@@ -649,7 +649,7 @@ function CodeBlock({ children, title }: { children: string; title?: React.ReactN
       )}
       <button
         onClick={handleCopy}
-        className="absolute top-2 right-2 rounded-md border border-border bg-background p-1.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
+        className="absolute top-2 right-2 rounded-md border border-border bg-background p-1.5 text-muted-foreground transition-colors hover:text-foreground"
         title="Kopiëren"
       >
         {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
@@ -684,6 +684,30 @@ function StepBadge({ type }: { type: "verplicht" | "aanbevolen" | "optioneel" | 
   };
   const { label, className } = config[type];
   return <span className={`ml-2 rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${className}`}>{label}</span>;
+}
+
+function CopyCode({ children }: { children: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(children);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <code
+      onClick={handleCopy}
+      className={`cursor-pointer rounded px-1.5 py-0.5 text-xs transition-colors ${
+        copied
+          ? "bg-primary/20 text-primary"
+          : "bg-muted text-foreground hover:bg-primary/10"
+      }`}
+      title="Klik om te kopiëren"
+    >
+      {copied ? "✓ Gekopieerd!" : children}
+    </code>
+  );
 }
 
 function TroubleItem({ q, a }: { q: string; a: string }) {
