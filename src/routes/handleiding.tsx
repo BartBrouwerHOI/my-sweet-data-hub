@@ -23,8 +23,8 @@ function HandleidingPage() {
 
   const [userConfig, setUserConfig] = useState({
     infraUrl: "https://github.com/BartBrouwerHOI/my-sweet-data-hub",
-    appUser: "",
-    appRepo: "",
+    appUser: "BartBrouwerHOI",
+    appRepo: "Access-Guardian",
     serverIp: "",
     domain: "",
     serverAIp: "",
@@ -38,8 +38,8 @@ function HandleidingPage() {
         // Migrate old format (drop infraUser/infraRepo if present)
         setUserConfig({
           infraUrl: parsed.infraUrl || "https://github.com/BartBrouwerHOI/my-sweet-data-hub",
-          appUser: parsed.appUser || parsed.githubUser || "",
-          appRepo: parsed.appRepo || parsed.repoName || "",
+          appUser: parsed.appUser || parsed.githubUser || "BartBrouwerHOI",
+          appRepo: parsed.appRepo || parsed.repoName || "Access-Guardian",
           serverIp: parsed.serverIp || "",
           domain: parsed.domain || "",
           serverAIp: parsed.serverAIp || "",
