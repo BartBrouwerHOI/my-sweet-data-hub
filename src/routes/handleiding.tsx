@@ -22,6 +22,7 @@ function HandleidingPage() {
   const [distro, setDistro] = useState<Distro>("debian");
 
   const [userConfig, setUserConfig] = useState({
+    infraUrl: "",
     appUser: "",
     appRepo: "",
     serverIp: "",
@@ -36,6 +37,7 @@ function HandleidingPage() {
         const parsed = JSON.parse(saved);
         // Migrate old format (drop infraUser/infraRepo if present)
         setUserConfig({
+          infraUrl: parsed.infraUrl || "",
           appUser: parsed.appUser || parsed.githubUser || "",
           appRepo: parsed.appRepo || parsed.repoName || "",
           serverIp: parsed.serverIp || "",
@@ -56,6 +58,7 @@ function HandleidingPage() {
 
   const fill = useCallback((text: string): string => {
     let result = text;
+    if (userConfig.infraUrl) result = result.replace(/INFRA-REPO-URL/g, userConfig.infraUrl);
     if (userConfig.appUser) result = result.replace(/APP-USER/g, userConfig.appUser);
     if (userConfig.appRepo) result = result.replace(/APP-REPO/g, userConfig.appRepo);
     if (userConfig.serverIp) result = result.replace(/JOUW-SERVER-IP/g, userConfig.serverIp);
@@ -189,6 +192,11 @@ function HandleidingPage() {
         <p className="mb-4 text-xs text-muted-foreground">
           Vul je gegevens in — alle commando's in de handleiding worden automatisch aangepast zodat je ze direct kunt kopiëren en plakken.
         </p>
+
+        <p className="mb-2 text-xs font-semibold text-foreground uppercase tracking-wide">🔧 Infra-repo <span className="font-normal text-muted-foreground">(dit project — publiek)</span></p>
+        <div className="grid grid-cols-1 gap-3 mb-4">
+          <ConfigInput label="HTTPS clone URL" placeholder="INFRA-REPO-URL" value={userConfig.infraUrl} onChange={v => updateField("infraUrl", v)} />
+        </div>
 
         <p className="mb-2 text-xs font-semibold text-foreground uppercase tracking-wide">📦 App-repo <span className="font-normal text-muted-foreground">(jouw Lovable project dat je wilt deployen)</span></p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 mb-4">
@@ -391,9 +399,7 @@ ssh -T -i ~/.ssh/deploy_key git@github.com`}</CodeBlock>
 
           <p><strong>Stap 1:</strong> Clone de <strong>infra-repo</strong> (publiek, geen key nodig):</p>
           <CodeBlock fill={fill}>{`# Clone de infra-repo via HTTPS (geen deploy key nodig)
-sudo mkdir -p /opt/lovable-infra
-sudo chown $USER:$USER /opt/lovable-infra
-git clone https://github.com/lovable-vps/lovable-infra.git /opt/lovable-infra`}</CodeBlock>
+git clone INFRA-REPO-URL /opt/lovable-infra`}</CodeBlock>
 
           <p><strong>Stap 2:</strong> Start de installer:</p>
           <CodeBlock fill={fill}>{`sudo bash /opt/lovable-infra/install.sh`}</CodeBlock>
@@ -424,9 +430,7 @@ git clone https://github.com/lovable-vps/lovable-infra.git /opt/lovable-infra`}<
           <Location icon="terminal" text="Terminal op Server A" />
           <p>Op Server A draai je de volledige Supabase stack (database, login, API, opslag):</p>
           <CodeBlock fill={fill}>{`# Clone de infra-repo via HTTPS (geen deploy key nodig)
-sudo mkdir -p /opt/lovable-infra
-sudo chown $USER:$USER /opt/lovable-infra
-git clone https://github.com/lovable-vps/lovable-infra.git /opt/lovable-infra
+git clone INFRA-REPO-URL /opt/lovable-infra
 
 # Start de installer
 sudo bash /opt/lovable-infra/install.sh
@@ -458,9 +462,7 @@ sudo firewall-cmd --reload`}</CodeBlock>
           <Location icon="terminal" text="Terminal op Server B" />
           <p>Op Server B draait alleen de React app — geen database, geen Supabase services:</p>
           <CodeBlock fill={fill}>{`# Clone de infra-repo via HTTPS (geen deploy key nodig)
-sudo mkdir -p /opt/lovable-infra
-sudo chown $USER:$USER /opt/lovable-infra
-git clone https://github.com/lovable-vps/lovable-infra.git /opt/lovable-infra
+git clone INFRA-REPO-URL /opt/lovable-infra
 
 # Start de installer
 sudo bash /opt/lovable-infra/install.sh
