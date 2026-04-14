@@ -196,7 +196,35 @@ clone_app() {
     log_info "App directory bestaat al, git pull uitvoeren..."
     cd "$APP_DIR" && git pull
   else
-    read -p "GitHub repo URL (SSH, bijv. git@github.com:user/repo.git): " GITHUB_REPO
+    echo ""
+    echo -e "${BLUE}Het script gaat nu je app-code clonen van GitHub.${NC}"
+    echo "  Plak de SSH URL van je repo. Die vind je op GitHub → Code → SSH."
+    echo "  Voorbeeld: git@github.com:JOUW-USER/JOUW-REPO.git"
+    echo ""
+    echo -e "  ${YELLOW}⚠ Dit is NIET de inhoud van install.sh — alleen de repo-URL!${NC}"
+    echo ""
+
+    while true; do
+      read -p "GitHub repo URL (SSH): " GITHUB_REPO
+
+      # Blokkeer per ongeluk geplakte scriptinhoud
+      if [[ -z "$GITHUB_REPO" ]]; then
+        log_error "Invoer is leeg. Plak de SSH URL van je GitHub repo."
+        continue
+      fi
+      if [[ "$GITHUB_REPO" == *"#!/bin/bash"* || "$GITHUB_REPO" == *$'\n'* ]]; then
+        log_error "Het lijkt erop dat je de inhoud van install.sh hebt geplakt!"
+        echo "  Plak alleen de SSH URL, bijv.: git@github.com:user/repo.git"
+        continue
+      fi
+      if [[ ! "$GITHUB_REPO" =~ ^git@github\.com:.+/.+\.git$ ]]; then
+        log_error "Ongeldig formaat. Verwacht: git@github.com:USER/REPO.git"
+        echo "  Gevonden: $GITHUB_REPO"
+        read -p "Toch doorgaan met deze URL? (j/n): " confirm
+        [[ "$confirm" != "j" ]] && continue
+      fi
+      break
+    done
 
     # Test SSH-verbinding met GitHub vóór clone
     log_info "SSH-verbinding met GitHub testen..."
