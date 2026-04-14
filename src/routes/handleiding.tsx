@@ -171,6 +171,26 @@ function HandleidingPage() {
         </p>
       </div>
 
+      {/* User config form */}
+      <div className="mb-10 rounded-lg border border-primary/30 bg-primary/5 p-5">
+        <div className="mb-3 flex items-center gap-2">
+          <Settings className="h-4 w-4 text-primary" />
+          <h2 className="text-sm font-semibold text-foreground">Jouw gegevens</h2>
+        </div>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Vul je gegevens in — alle commando's in de handleiding worden automatisch aangepast zodat je ze direct kunt kopiëren en plakken.
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <ConfigInput label="GitHub gebruikersnaam" placeholder="JOUW-USER" value={userConfig.githubUser} onChange={v => updateField("githubUser", v)} />
+          <ConfigInput label="Repository naam" placeholder="JOUW-REPO" value={userConfig.repoName} onChange={v => updateField("repoName", v)} />
+          <ConfigInput label="Server IP" placeholder="JOUW-SERVER-IP" value={userConfig.serverIp} onChange={v => updateField("serverIp", v)} />
+          <ConfigInput label="Domeinnaam" placeholder="jouw-domein.nl" value={userConfig.domain} onChange={v => updateField("domain", v)} />
+          {mode === "split" && (
+            <ConfigInput label="Server A IP (backend)" placeholder="SERVER_A_IP" value={userConfig.serverAIp} onChange={v => updateField("serverAIp", v)} />
+          )}
+        </div>
+      </div>
+
       {/* Table of contents */}
       <nav className="mb-12 rounded-lg border border-border bg-muted/50 p-5">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Inhoud</h2>
