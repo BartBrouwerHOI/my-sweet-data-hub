@@ -23,8 +23,8 @@ function HandleidingPage() {
 
   const [userConfig, setUserConfig] = useState({
     infraUrl: "https://github.com/BartBrouwerHOI/my-sweet-data-hub",
-    appUser: "",
-    appRepo: "",
+    appUser: "BartBrouwerHOI",
+    appRepo: "Access-Guardian",
     serverIp: "",
     domain: "",
     serverAIp: "",
