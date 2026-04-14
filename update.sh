@@ -1,41 +1,25 @@
 #!/bin/bash
 set -euo pipefail
 
-APP_DIR="/opt/lovable-app"
-SUPABASE_DIR="/opt/supabase"
+# ============================================================
+# Lovable App Updater — Universele Deployment Toolkit
+# ============================================================
+# Dit is een fallback. De installer maakt een lovable-update
+# commando aan met de juiste paden en projecttype.
+# Gebruik bij voorkeur: lovable-update
+# ============================================================
 
 echo "=== Lovable App Updater ==="
 echo ""
+echo "💡 Gebruik bij voorkeur het commando: lovable-update"
+echo "   Dat bevat de juiste configuratie voor jouw installatie."
+echo ""
 
-# Pull latest code
-echo "[1/4] Code ophalen van GitHub..."
-cd "$APP_DIR"
-git pull
-
-# Rebuild frontend
-echo "[2/4] Frontend opnieuw bouwen..."
-docker build -t lovable-frontend -f Dockerfile .
-
-# Restart frontend container
-echo "[3/4] Frontend herstarten..."
-docker stop lovable-frontend 2>/dev/null || true
-docker rm lovable-frontend 2>/dev/null || true
-docker run -d \
-  --name lovable-frontend \
-  --restart unless-stopped \
-  -p 3000:3000 \
-  lovable-frontend
-
-# Run new migrations if any
-echo "[4/4] Database migraties controleren..."
-if [[ -d "$APP_DIR/supabase/migrations" ]]; then
-  for migration in "$APP_DIR/supabase/migrations/"*.sql; do
-    if [[ -f "$migration" ]]; then
-      echo "  Migratie uitvoeren: $(basename "$migration")"
-      docker exec supabase-db psql -U supabase -d postgres -f "/docker-entrypoint-initdb.d/$(basename "$migration")" 2>/dev/null || true
-    fi
-  done
+if command -v lovable-update &>/dev/null; then
+  exec lovable-update
 fi
 
-echo ""
-echo "✅ Update compleet! De app draait weer."
+echo "[ERROR] lovable-update niet gevonden."
+echo "  Draai eerst de installer opnieuw, of gebruik:"
+echo "  sudo bash /opt/lovable-infra/install.sh"
+exit 1

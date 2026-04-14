@@ -236,11 +236,14 @@ function HandleidingPage() {
           <>
             <p>Alles draait op één VM:</p>
             <CodeBlock fill={fill}>{`[VM - 4GB RAM]
+├── /opt/lovable-infra/  ← Infra-repo (installer, Dockerfiles, Supabase stack)
+├── /opt/lovable-app/    ← App-repo (jouw Lovable project)
+│
 ├── Nginx (SSL termination + reverse proxy)
-│   ├── /           → Node.js frontend (poort 3000)
+│   ├── /           → Frontend container (poort 3000)
 │   └── /auth, /rest, /storage, /realtime → Kong API Gateway (poort 8000)
 │
-├── React Frontend (Node.js, Docker container)
+├── Frontend (Docker container, SPA of SSR — automatisch gedetecteerd)
 │
 └── Supabase stack (Docker Compose)
     ├── Kong (API Gateway, poort 8000) ← valideert API keys
@@ -368,26 +371,25 @@ ssh -T -i ~/.ssh/deploy_key git@github.com`}</CodeBlock>
       {mode === "single" && (
         <Step id="installatie" number={steps.findIndex(s => s.id === "installatie") + 1} title={<>Installatie <StepBadge type="verplicht" /></>}>
           <Location icon="terminal" text="Terminal op je VM" />
-          <p>Clone je repo en draai het install-script:</p>
-          <Warn>Gebruik <strong>niet</strong> <CopyCode fill={fill}>sudo git clone</CopyCode> — sudo draait als root en heeft geen toegang tot jouw SSH key. Maak eerst de map aan, dan clone je als gewone gebruiker.</Warn>
-          <CodeBlock fill={fill}>{`# Maak de map aan en geef jezelf rechten
-sudo mkdir -p /opt/lovable-app
-sudo chown $USER:$USER /opt/lovable-app
 
-# Clone als huidige gebruiker (die de SSH key heeft)
-git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
-
-# Start de installer
-cd /opt/lovable-app
-
-# Controleer of install.sh aanwezig is
-ls install.sh`}</CodeBlock>
-          <InstallShMissing fill={fill} />
           <Tip>
-            <strong>JOUW-USER</strong> = je GitHub gebruikersnaam (bijv. <CopyCode fill={fill}>jandevries</CopyCode>)<br />
-            <strong>JOUW-REPO</strong> = de naam van je repository (bijv. <CopyCode fill={fill}>mijn-app</CopyCode>)<br />
-            Je vindt dit in de URL van je repo: github.com/<strong>JOUW-USER</strong>/<strong>JOUW-REPO</strong>
+            <strong>Hoe werkt het?</strong> Dit project is de <strong>infrastructuur-laag</strong> (installer, Supabase stack, Dockerfiles). 
+            Je app-code wordt apart gecloned. Zo kun je dezelfde infra gebruiken voor elk Lovable-project.
           </Tip>
+
+          <p><strong>Stap 1:</strong> Clone de <strong>infra-repo</strong> (dit project):</p>
+          <Warn>Gebruik <strong>niet</strong> <CopyCode fill={fill}>sudo git clone</CopyCode> — sudo draait als root en heeft geen toegang tot jouw SSH key.</Warn>
+          <CodeBlock fill={fill}>{`# Maak de map aan en geef jezelf rechten
+sudo mkdir -p /opt/lovable-infra
+sudo chown $USER:$USER /opt/lovable-infra
+
+# Clone de infra-repo (dit project met installer + Supabase stack)
+git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-infra`}</CodeBlock>
+
+          <p><strong>Stap 2:</strong> Start de installer:</p>
+          <CodeBlock fill={fill}>{`# Start de installer
+sudo bash /opt/lovable-infra/install.sh`}</CodeBlock>
+
           <p>Het script vraagt om:</p>
           <ul className="list-inside list-disc space-y-1">
             <li><strong>Installatiemodus</strong> — kies <CopyCode fill={fill}>1) Volledige installatie</CopyCode></li>
@@ -395,7 +397,14 @@ ls install.sh`}</CodeBlock>
             <li><strong>Admin e-mail</strong> — voor het <InfoTooltip text="Versleutelde verbinding (https) zodat data veilig verstuurd wordt. Let's Encrypt geeft gratis SSL-certificaten uit." /> certificaat</li>
             <li><strong>Database wachtwoord</strong> — kies iets sterks, je hebt dit later nodig</li>
             <li><strong>Dashboard wachtwoord</strong> — voor Supabase Studio (admin paneel)</li>
+            <li><strong>GitHub repo URL</strong> — de SSH URL van je <strong>app-project</strong> (niet de infra-repo!)</li>
           </ul>
+
+          <Tip>
+            Het script detecteert automatisch of je app een <strong>SPA</strong> (Vite + React) of <strong>SSR</strong> (TanStack Start) project is 
+            en kiest het juiste Dockerfile. Je hoeft hier niets voor te configureren.
+          </Tip>
+
           <p className="mt-2">Het script doet de rest: het detecteert automatisch of je {distro === "debian" ? "Ubuntu/Debian" : "CentOS/AlmaLinux/Rocky"} draait en installeert de juiste packages ({distro === "debian" ? "apt" : "dnf"}), <InfoTooltip text="Software die in een afgesloten 'doos' draait, zodat het overal hetzelfde werkt — ongeacht het besturingssysteem." />, secrets genereren, containers starten, <InfoTooltip text="Webserver die bezoekers doorstuurt naar de juiste service (reverse proxy)." /> + SSL en firewall ({distro === "debian" ? "UFW" : "firewalld"}).</p>
           <Warn>Het script zet <CopyCode fill={fill}>GOTRUE_MAILER_AUTOCONFIRM: true</CopyCode>. Dit bevestigt e-mailadressen automatisch zonder verificatie-email. Voor productie: stel <InfoTooltip text="Protocol voor het versturen van e-mails — nodig voor verificatie-mails en wachtwoord-reset." /> in (stap {steps.findIndex(s => s.id === "smtp-oauth") + 1}) en zet dit op <CopyCode fill={fill}>false</CopyCode>.</Warn>
         </Step>
@@ -408,23 +417,16 @@ ls install.sh`}</CodeBlock>
           <p>Op Server A draai je de volledige Supabase stack (database, login, API, opslag):</p>
           <Warn>Gebruik <strong>niet</strong> <CopyCode fill={fill}>sudo git clone</CopyCode> — sudo draait als root en heeft geen toegang tot jouw SSH key.</Warn>
           <CodeBlock fill={fill}>{`# Maak de map aan en geef jezelf rechten
-sudo mkdir -p /opt/lovable-app
-sudo chown $USER:$USER /opt/lovable-app
+sudo mkdir -p /opt/lovable-infra
+sudo chown $USER:$USER /opt/lovable-infra
 
-# Clone als huidige gebruiker
-git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
+# Clone de infra-repo (dit project)
+git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-infra
 
-# Ga naar de gekloonde map
-cd /opt/lovable-app
-
-# Controleer of install.sh aanwezig is
-ls install.sh
-
-# Start de installer (als install.sh gevonden is)
-sudo bash install.sh
+# Start de installer
+sudo bash /opt/lovable-infra/install.sh
 
 # Kies: 2) Alleen database (Supabase stack)`}</CodeBlock>
-          <InstallShMissing fill={fill} />
           <p>Het script start alle Supabase containers en <InfoTooltip text="API Gateway — controleert of API-verzoeken een geldige sleutel hebben voordat ze worden doorgestuurd naar de juiste service." /> (API Gateway op poort 8000).</p>
 
           <h4 className="mt-4 font-semibold text-foreground"><InfoTooltip text="Bepaalt welke poorten open of dicht staan op je server — beschermt tegen ongewenste toegang van buitenaf." /> instellen</h4>
@@ -453,25 +455,18 @@ sudo firewall-cmd --reload`}</CodeBlock>
           <Location icon="terminal" text="Terminal op Server B" />
           <p>Op Server B draait alleen de React app — geen database, geen Supabase services:</p>
           <CodeBlock fill={fill}>{`# Maak de map aan en geef jezelf rechten
-sudo mkdir -p /opt/lovable-app
-sudo chown $USER:$USER /opt/lovable-app
+sudo mkdir -p /opt/lovable-infra
+sudo chown $USER:$USER /opt/lovable-infra
 
-# Clone als huidige gebruiker
-git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
+# Clone de infra-repo (dit project)
+git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-infra
 
-# Ga naar de gekloonde map
-cd /opt/lovable-app
-
-# Controleer of install.sh aanwezig is
-ls install.sh
-
-# Start de installer (als install.sh gevonden is)
-sudo bash install.sh
+# Start de installer
+sudo bash /opt/lovable-infra/install.sh
 
 # Kies: 3) Alleen frontend
 # Voer het IP-adres van Server A in wanneer gevraagd
 # Voer de Anon Key in die je bij Server A hebt genoteerd`}</CodeBlock>
-          <InstallShMissing fill={fill} />
           <p>Het script bouwt de React app als <InfoTooltip text="Software die in een afgesloten 'doos' draait, zodat het overal hetzelfde werkt." />, configureert <InfoTooltip text="Webserver die bezoekers doorstuurt naar de juiste service (reverse proxy)." /> als reverse proxy en regelt SSL.</p>
         </Step>
       )}
@@ -528,12 +523,12 @@ curl http://localhost/rest/v1/ -H "apikey: JOUW_ANON_KEY"`}</CodeBlock>
             <CodeBlock fill={fill}>{`# Eén commando om alles te updaten:
 lovable-update
 
-# Of handmatig:
-cd /opt/lovable-app
-git pull
-docker build -t lovable-frontend -f Dockerfile .
-docker stop lovable-frontend && docker rm lovable-frontend
-docker run -d --name lovable-frontend --restart unless-stopped -p 3000:3000 lovable-frontend`}</CodeBlock>
+# Dit doet:
+# 1. git pull in /opt/lovable-infra (infra-updates)
+# 2. git pull in /opt/lovable-app (app-updates)
+# 3. Rebuild frontend met juiste Dockerfile (SPA of SSR)
+# 4. Restart container
+# 5. Database migraties draaien`}</CodeBlock>
           </>
         ) : (
           <>
@@ -837,471 +832,8 @@ function CopyCode({ children, fill }: { children: string; fill?: (t: string) => 
   );
 }
 
-function InstallShMissing({ fill }: { fill?: (t: string) => string }) {
-  const [showScript, setShowScript] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  const installScript = `#!/bin/bash
-set -euo pipefail
-
-# ============================================================
-# Lovable VPS Installer — Ubuntu 24 + Self-Hosted Supabase
-# ============================================================
-
-RED='\\033[0;31m'
-GREEN='\\033[0;32m'
-YELLOW='\\033[1;33m'
-BLUE='\\033[0;34m'
-NC='\\033[0m'
-
-DISTRO_FAMILY=""
-DISTRO_ID=""
-INSTALL_MODE=""
-GITHUB_REPO=""
-DOMAIN=""
-ADMIN_EMAIL=""
-DB_PASSWORD=""
-DASHBOARD_PASSWORD=""
-DB_SERVER_IP=""
-DB_SERVER_ANON_KEY=""
-APP_DIR="/opt/lovable-app"
-SUPABASE_DIR="/opt/supabase"
-
-JWT_SECRET=""
-ANON_KEY=""
-SERVICE_ROLE_KEY=""
-POSTGRES_PASSWORD=""
-SECRET_KEY_BASE=""
-LOGFLARE_API_KEY=""
-
-print_banner() {
-  echo -e "\${BLUE}"
-  echo "Lovable VPS Installer v2.0"
-  echo -e "\${NC}"
-}
-
-log_info()  { echo -e "\${GREEN}[INFO]\${NC} \$1"; }
-log_warn()  { echo -e "\${YELLOW}[WARN]\${NC} \$1"; }
-log_error() { echo -e "\${RED}[ERROR]\${NC} \$1"; }
-
-detect_distro() {
-  if [[ -f /etc/os-release ]]; then
-    DISTRO_ID=$(. /etc/os-release && echo "\$ID")
-  else
-    log_error "Kan /etc/os-release niet lezen."
-    exit 1
-  fi
-  case "\$DISTRO_ID" in
-    ubuntu|debian) DISTRO_FAMILY="debian" ;;
-    centos|almalinux|rocky|rhel|fedora) DISTRO_FAMILY="rhel" ;;
-    *) DISTRO_FAMILY="debian" ;;
-  esac
-  log_info "Gedetecteerd: \$DISTRO_ID (\$DISTRO_FAMILY)"
-}
-
-check_requirements() {
-  if [[ \$EUID -ne 0 ]]; then
-    log_error "Dit script moet als root gedraaid worden."
-    exit 1
-  fi
-}
-
-select_mode() {
-  echo ""
-  echo "Welke installatie wil je uitvoeren?"
-  echo "  1) Volledige installatie"
-  echo "  2) Alleen database"
-  echo "  3) Alleen frontend"
-  read -p "Keuze [1/2/3]: " mode_choice
-  case "\$mode_choice" in
-    1) INSTALL_MODE="full" ;;
-    2) INSTALL_MODE="database" ;;
-    3) INSTALL_MODE="frontend" ;;
-    *) log_error "Ongeldige keuze"; exit 1 ;;
-  esac
-}
-
-gather_input() {
-  if [[ "\$INSTALL_MODE" == "frontend" ]]; then
-    read -p "IP of domein van de database-server: " DB_SERVER_IP
-    read -p "Anon Key van de database-server: " DB_SERVER_ANON_KEY
-  fi
-  read -p "Domeinnaam (of laat leeg voor IP): " DOMAIN
-  read -p "Admin e-mailadres: " ADMIN_EMAIL
-  if [[ "\$INSTALL_MODE" != "frontend" ]]; then
-    read -sp "Database wachtwoord: " DB_PASSWORD && echo
-    read -sp "Dashboard wachtwoord: " DASHBOARD_PASSWORD && echo
-  fi
-}
-
-install_dependencies() {
-  log_info "Dependencies installeren..."
-  if [[ "\$DISTRO_FAMILY" == "debian" ]]; then
-    apt-get update -qq
-    apt-get install -y -qq curl git nginx certbot python3-certbot-nginx ufw jq openssl
-  elif [[ "\$DISTRO_FAMILY" == "rhel" ]]; then
-    dnf install -y -q epel-release
-    dnf install -y -q curl git nginx certbot certbot-nginx firewalld jq openssl
-    systemctl enable --now firewalld
-  fi
-  if ! command -v docker &>/dev/null; then
-    curl -fsSL https://get.docker.com | sh
-    systemctl enable docker && systemctl start docker
-  fi
-  if ! docker compose version &>/dev/null; then
-    if [[ "\$DISTRO_FAMILY" == "debian" ]]; then
-      apt-get install -y -qq docker-compose-plugin
-    else
-      dnf install -y -q docker-compose-plugin
-    fi
-  fi
-}
-
-generate_jwt() {
-  local role=\$1 header payload signature
-  header=\$(echo -n '{"alg":"HS256","typ":"JWT"}' | base64 -w0 | tr '+/' '-_' | tr -d '=')
-  payload=\$(echo -n "{\\"role\\":\\"\$role\\",\\"iss\\":\\"supabase\\",\\"iat\\":\$(date +%s),\\"exp\\":\$((\$(date +%s) + 157680000))}" | base64 -w0 | tr '+/' '-_' | tr -d '=')
-  signature=\$(echo -n "\${header}.\${payload}" | openssl dgst -sha256 -hmac "\$JWT_SECRET" -binary | base64 -w0 | tr '+/' '-_' | tr -d '=')
-  echo "\${header}.\${payload}.\${signature}"
-}
-
-generate_secrets() {
-  log_info "Sleutels genereren..."
-  JWT_SECRET=\$(openssl rand -hex 32)
-  ANON_KEY=\$(generate_jwt "anon")
-  SERVICE_ROLE_KEY=\$(generate_jwt "service_role")
-  POSTGRES_PASSWORD="\$DB_PASSWORD"
-  SECRET_KEY_BASE=\$(openssl rand -hex 64)
-  LOGFLARE_API_KEY=\$(openssl rand -hex 32)
-}
-
-clone_app() {
-  log_info "App clonen..."
-
-  # Checksum van het NU draaiende script opslaan vóór clone
-  local current_checksum=""
-  if [[ -f "\$0" ]]; then
-    current_checksum=\$(sha256sum "\$0" 2>/dev/null | cut -d' ' -f1 || true)
-  fi
-
-  if [[ -d "\$APP_DIR" ]]; then
-    if [[ -d "\$APP_DIR/.git" ]]; then
-      log_info "Geldige repo gevonden, git pull..."
-      cd "\$APP_DIR" && git pull
-      _self_update_check "\$current_checksum"
-      return
-    else
-      log_warn "Map \$APP_DIR bestaat maar is geen geldige repo."
-      echo ""
-      echo "  Dit komt meestal door een eerdere mislukte installatie."
-      read -p "  Mag ik \$APP_DIR verwijderen en opnieuw clonen? (j/n): " confirm
-      if [[ "\$confirm" == "j" ]]; then
-        cd /
-        rm -rf "\$APP_DIR"
-        log_info "Map verwijderd."
-      else
-        log_error "Kan niet doorgaan. Verwijder handmatig: cd ~ && sudo rm -rf \$APP_DIR"
-        exit 1
-      fi
-    fi
-  fi
-
-  echo ""
-  echo -e "\${BLUE}Het script gaat nu je app-code clonen van GitHub.\${NC}"
-  echo "  Plak de SSH URL van je repo. Die vind je op GitHub → Code → SSH."
-  echo "  Voorbeeld: git@github.com:JOUW-USER/JOUW-REPO.git"
-  echo ""
-  echo -e "  \${YELLOW}⚠ Dit is NIET de inhoud van install.sh — alleen de repo-URL!\${NC}"
-  echo ""
-
-  while true; do
-    read -p "GitHub repo URL (SSH): " GITHUB_REPO
-    if [[ -z "\$GITHUB_REPO" ]]; then
-      log_error "Invoer is leeg. Plak de SSH URL van je GitHub repo."
-      continue
-    fi
-    if [[ "\$GITHUB_REPO" == *"#!/bin/bash"* || "\$GITHUB_REPO" == *$'\\n'* ]]; then
-      log_error "Het lijkt erop dat je de inhoud van install.sh hebt geplakt!"
-      echo "  Plak alleen de SSH URL, bijv.: git@github.com:user/repo.git"
-      continue
-    fi
-    if [[ ! "\$GITHUB_REPO" =~ ^git@github\\.com:.+/.+\\.git\$ ]]; then
-      log_error "Ongeldig formaat. Verwacht: git@github.com:USER/REPO.git"
-      echo "  Gevonden: \$GITHUB_REPO"
-      read -p "Toch doorgaan met deze URL? (j/n): " confirm
-      [[ "\$confirm" != "j" ]] && continue
-    fi
-    break
-  done
-
-  log_info "SSH-verbinding met GitHub testen..."
-  local ssh_output
-  ssh_output=\$(ssh -T -o ConnectTimeout=10 git@github.com 2>&1 || true)
-  if ! echo "\$ssh_output" | grep -q "successfully authenticated"; then
-    log_error "SSH-verbinding met GitHub mislukt!"
-    echo ""
-    echo "  Mogelijke oorzaken:"
-    echo "  1. Geen deploy key aangemaakt"
-    echo "  2. Deploy key niet toegevoegd aan GitHub repo"
-    echo "  3. SSH config ontbreekt"
-    echo ""
-    echo "  💡 Draai je dit met sudo? Kopieer je key naar root:"
-    echo "     sudo cp ~/.ssh/deploy_key /root/.ssh/deploy_key"
-    echo "     sudo cp ~/.ssh/config /root/.ssh/config"
-    echo ""
-    read -p "Wil je toch doorgaan met clonen? (j/n): " confirm
-    [[ "\$confirm" != "j" ]] && exit 1
-  fi
-  git clone "\$GITHUB_REPO" "\$APP_DIR"
-
-  _self_update_check "\$current_checksum"
-}
-
-_self_update_check() {
-  local old_checksum="\$1"
-  [[ -z "\$old_checksum" ]] && return
-  [[ ! -f "\$APP_DIR/install.sh" ]] && return
-  local new_checksum
-  new_checksum=\$(sha256sum "\$APP_DIR/install.sh" 2>/dev/null | cut -d' ' -f1 || true)
-  if [[ "\$old_checksum" != "\$new_checksum" ]]; then
-    log_info "Nieuwere install.sh gevonden, herstart..."
-    cp "\$APP_DIR/install.sh" /usr/local/bin/lovable-install
-    chmod +x /usr/local/bin/lovable-install
-    exec bash "\$APP_DIR/install.sh" "\$@"
-  fi
-}
-
-setup_supabase() {
-  log_info "Supabase configureren..."
-  mkdir -p "\$SUPABASE_DIR"
-  local api_url
-  if [[ -n "\$DOMAIN" ]]; then api_url="https://\$DOMAIN"; else api_url="http://\$(curl -s ifconfig.me)"; fi
-  cat > "\$SUPABASE_DIR/.env" <<ENVEOF
-POSTGRES_PASSWORD=\$POSTGRES_PASSWORD
-JWT_SECRET=\$JWT_SECRET
-ANON_KEY=\$ANON_KEY
-SERVICE_ROLE_KEY=\$SERVICE_ROLE_KEY
-DASHBOARD_PASSWORD=\$DASHBOARD_PASSWORD
-SECRET_KEY_BASE=\$SECRET_KEY_BASE
-LOGFLARE_API_KEY=\$LOGFLARE_API_KEY
-API_EXTERNAL_URL=\$api_url
-SUPABASE_PUBLIC_URL=\$api_url
-SMTP_ADMIN_EMAIL=\$ADMIN_EMAIL
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_USER=
-SMTP_PASS=
-SMTP_SENDER_NAME=Lovable App
-SITE_URL=\$api_url
-ENVEOF
-  if [[ ! -f "\$APP_DIR/docker-compose.yml" ]]; then
-    log_error "docker-compose.yml niet gevonden in \$APP_DIR"
-    echo "  Controleer of docker-compose.yml in de root van je repo staat."
-    echo "  Bestanden in \$APP_DIR:"
-    ls -la "\$APP_DIR/" 2>/dev/null || echo "  (map niet gevonden)"
-    exit 1
-  fi
-  cp "\$APP_DIR/docker-compose.yml" "\$SUPABASE_DIR/docker-compose.yml"
-  mkdir -p "\$SUPABASE_DIR/volumes/db/data" "\$SUPABASE_DIR/volumes/storage" "\$SUPABASE_DIR/volumes/db/init" "\$SUPABASE_DIR/volumes/kong"
-  [[ -f "\$APP_DIR/volumes/kong/kong.yml" ]] && cp "\$APP_DIR/volumes/kong/kong.yml" "\$SUPABASE_DIR/volumes/kong/kong.yml"
-  if [[ -d "\$APP_DIR/supabase/migrations" ]]; then
-    cp "\$APP_DIR/supabase/migrations/"*.sql "\$SUPABASE_DIR/volumes/db/init/" 2>/dev/null || true
-  fi
-}
-
-build_frontend() {
-  log_info "Frontend bouwen..."
-  local api_url anon_key
-  if [[ "\$INSTALL_MODE" == "frontend" ]]; then
-    api_url="http://\$DB_SERVER_IP:8000"
-    anon_key="\$DB_SERVER_ANON_KEY"
-  else
-    if [[ -n "\$DOMAIN" ]]; then api_url="https://\$DOMAIN"; else api_url="http://\$(curl -s ifconfig.me)"; fi
-    anon_key="\$ANON_KEY"
-  fi
-  cat > "\$APP_DIR/.env.production" <<ENVEOF
-VITE_SUPABASE_URL=\$api_url
-VITE_SUPABASE_PUBLISHABLE_KEY=\$anon_key
-ENVEOF
-  cd "\$APP_DIR"
-  docker build -t lovable-frontend -f Dockerfile .
-}
-
-start_supabase() {
-  log_info "Supabase starten..."
-  cd "\$SUPABASE_DIR" && docker compose up -d
-  sleep 15
-}
-
-start_frontend() {
-  log_info "Frontend starten..."
-  docker stop lovable-frontend 2>/dev/null || true
-  docker rm lovable-frontend 2>/dev/null || true
-  docker run -d --name lovable-frontend --restart unless-stopped -p 3000:3000 lovable-frontend
-}
-
-configure_nginx() {
-  log_info "Nginx configureren..."
-  local server_name nginx_conf_path
-  [[ -n "\$DOMAIN" ]] && server_name="\$DOMAIN" || server_name="_"
-  if [[ "\$DISTRO_FAMILY" == "rhel" ]]; then
-    nginx_conf_path="/etc/nginx/conf.d/lovable.conf"
-  else
-    nginx_conf_path="/etc/nginx/sites-available/lovable"
-  fi
-  # (Nginx config wordt gegenereerd op basis van INSTALL_MODE)
-  # Zie de volledige versie in je GitHub repo
-  nginx -t && systemctl reload nginx
-}
-
-setup_ssl() {
-  if [[ -n "\$DOMAIN" ]]; then
-    certbot --nginx -d "\$DOMAIN" --non-interactive --agree-tos -m "\$ADMIN_EMAIL" || log_warn "SSL mislukt"
-  fi
-}
-
-configure_firewall() {
-  log_info "Firewall configureren..."
-  if [[ "\$DISTRO_FAMILY" == "rhel" ]]; then
-    firewall-cmd --permanent --add-service=ssh
-    firewall-cmd --permanent --add-service=http
-    firewall-cmd --permanent --add-service=https
-    firewall-cmd --reload
-  else
-    ufw --force enable
-    ufw allow ssh && ufw allow http && ufw allow https
-    ufw reload
-  fi
-}
-
-create_update_script() {
-  cat > "\$APP_DIR/update.sh" <<'UPDATEEOF'
-#!/bin/bash
-set -euo pipefail
-APP_DIR="/opt/lovable-app"
-SUPABASE_DIR="/opt/supabase"
-cd "\$APP_DIR" && git pull
-docker build -t lovable-frontend -f Dockerfile .
-docker stop lovable-frontend 2>/dev/null || true
-docker rm lovable-frontend 2>/dev/null || true
-docker run -d --name lovable-frontend --restart unless-stopped -p 3000:3000 lovable-frontend
-echo "Update compleet!"
-UPDATEEOF
-  chmod +x "\$APP_DIR/update.sh"
-  ln -sf "\$APP_DIR/update.sh" /usr/local/bin/lovable-update
-}
-
-print_summary() {
-  local url
-  [[ -n "\$DOMAIN" ]] && url="https://\$DOMAIN" || url="http://\$(curl -s ifconfig.me)"
-  echo ""
-  echo "INSTALLATIE COMPLEET! Modus: \$INSTALL_MODE"
-  if [[ "\$INSTALL_MODE" != "frontend" ]]; then
-    echo "Anon Key: \$ANON_KEY"
-    echo "Service Role Key: \$SERVICE_ROLE_KEY"
-    echo "JWT Secret: \$JWT_SECRET"
-    echo "DB Wachtwoord: \$POSTGRES_PASSWORD"
-  fi
-  [[ "\$INSTALL_MODE" != "database" ]] && echo "App URL: \$url"
-  [[ "\$INSTALL_MODE" != "frontend" ]] && echo "Studio: \$url:8080"
-  echo "Updates: lovable-update"
-}
-
-main() {
-  print_banner
-  detect_distro
-  select_mode
-  check_requirements
-  gather_input
-  install_dependencies
-  clone_app
-  case "\$INSTALL_MODE" in
-    full) generate_secrets; setup_supabase; build_frontend; start_supabase; start_frontend ;;
-    database) generate_secrets; setup_supabase; start_supabase ;;
-    frontend) build_frontend; start_frontend ;;
-  esac
-  configure_nginx
-  setup_ssl
-  configure_firewall
-  create_update_script
-  print_summary
-}
-
-main "\$@"`;
-
-  const handleCopyScript = async () => {
-    await navigator.clipboard.writeText(installScript);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 3000);
-  };
-
-  return (
-    <Warn>
-      <strong>install.sh niet gevonden?</strong> Je repo is waarschijnlijk privé — de standaard <code className="rounded bg-muted px-1 text-xs">curl</code> download werkt dan niet.
-      <div className="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 text-foreground text-xs">
-        <strong>⚠️ Let op:</strong> Ook als je install.sh handmatig aanmaakt, vraagt het script om je GitHub repo URL en kloont het via SSH. Zorg dat je de <strong>deploy key stap</strong> hierboven eerst hebt uitgevoerd!
-      </div>
-      <ol className="list-inside list-decimal mt-2 space-y-2">
-        <li>
-          <strong>Check GitHub:</strong> Open je repo op github.com en kijk of <code className="rounded bg-muted px-1 text-xs">install.sh</code> in de root staat
-        </li>
-        <li>
-          <strong>Sync gefaald?</strong> Ga naar Lovable → Settings → Connectors → GitHub → <strong>Disconnect</strong> en opnieuw <strong>Connect</strong>. Wacht tot de sync klaar is
-        </li>
-        <li>
-          <strong>Handmatig aanmaken:</strong> Kopieer het script hieronder direct op je server
-        </li>
-      </ol>
-
-      <div className="mt-3">
-        <button
-          onClick={() => setShowScript(!showScript)}
-          className="flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
-        >
-          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showScript ? "rotate-180" : ""}`} />
-          {showScript ? "Verberg install.sh" : "Toon install.sh (handmatig kopiëren)"}
-        </button>
-      </div>
-
-      {showScript && (
-        <div className="mt-2 rounded-lg border border-border bg-muted/60">
-          <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
-            <span className="text-xs font-medium text-muted-foreground">install.sh</span>
-            <button
-              onClick={handleCopyScript}
-              className="flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
-            >
-              {copied ? <><Check className="h-3 w-3 text-green-500" /> Gekopieerd!</> : <><Copy className="h-3 w-3" /> Kopieer alles</>}
-            </button>
-          </div>
-          <pre className="max-h-96 overflow-auto p-3 text-[10px] leading-relaxed text-foreground"><code>{installScript}</code></pre>
-          <div className="border-t border-border px-3 py-2 text-xs text-muted-foreground space-y-2">
-            <p className="font-semibold text-foreground">Stap-voor-stap:</p>
-            <div className="space-y-1.5">
-              <p><strong>Stap 1:</strong> Maak de map aan (als die nog niet bestaat):</p>
-              <pre className="rounded bg-muted px-2 py-1 text-[11px]"><code>sudo mkdir -p /opt/lovable-app</code></pre>
-              <p><strong>Stap 2:</strong> Maak het bestand aan op je server:</p>
-              <pre className="rounded bg-muted px-2 py-1 text-[11px]"><code>nano /opt/lovable-app/install.sh</code></pre>
-              <p><strong>Stap 3:</strong> Plak de gekopieerde inhoud in nano → opslaan met <code className="rounded bg-muted px-1">Ctrl+O</code>, <code className="rounded bg-muted px-1">Enter</code>, sluiten met <code className="rounded bg-muted px-1">Ctrl+X</code></p>
-              <p><strong>Stap 4:</strong> Maak uitvoerbaar en start de installatie:</p>
-              <pre className="rounded bg-muted px-2 py-1 text-[11px]"><code>chmod +x /opt/lovable-app/install.sh{"\n"}sudo bash /opt/lovable-app/install.sh</code></pre>
-              <p><strong>Stap 5:</strong> Als het script vraagt om <strong>GitHub repo URL</strong>, plak dan de SSH URL van je repo:</p>
-              <pre className="rounded bg-muted px-2 py-1 text-[11px]"><code>{fill ? fill("git@github.com:JOUW-USER/JOUW-REPO.git") : "git@github.com:JOUW-USER/JOUW-REPO.git"}</code></pre>
-              <p className="text-muted-foreground">Die vind je op GitHub → <strong>Code</strong> knop → tabje <strong>SSH</strong>.</p>
-            </div>
-            <div className="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 text-foreground">
-              <strong>⚠️ Let op:</strong> Gebruik altijd het volledige pad: <code className="rounded bg-muted px-1">sudo bash /opt/lovable-app/install.sh</code>. Plak bij de repo-URL vraag <strong>niet</strong> opnieuw de inhoud van install.sh!
-            </div>
-            <div className="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 text-foreground">
-              <strong>💡 Eerdere mislukte poging?</strong> Als je de fout <code className="rounded bg-muted px-1">destination path already exists</code> krijgt, typ eerst <code className="rounded bg-muted px-1">cd ~</code> en dan <code className="rounded bg-muted px-1">sudo rm -rf /opt/lovable-app</code>. Maak de map opnieuw aan en begin bij stap 1.
-            </div>
-          </div>
-        </div>
-      )}
-    </Warn>
-  );
-}
-
+// InstallShMissing component removed — no longer needed with infra/app split architecture.
+// The infra-repo always contains install.sh.
 function ConfigInput({ label, placeholder, value, onChange }: { label: string; placeholder: string; value: string; onChange: (v: string) => void }) {
   return (
     <div>

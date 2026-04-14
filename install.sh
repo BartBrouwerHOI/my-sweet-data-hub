@@ -2,12 +2,15 @@
 set -euo pipefail
 
 # ============================================================
-# Lovable VPS Installer — Ubuntu 24 + Self-Hosted Supabase
+# Lovable VPS Installer — Universele Deployment Toolkit
 # ============================================================
-# Ondersteunt drie modi:
-#   1) Volledige installatie (frontend + database)
-#   2) Alleen database (Supabase stack)
-#   3) Alleen frontend (React app + Nginx)
+# Dit project is de INFRASTRUCTUUR-laag.
+# Het app-project wordt apart gecloned naar /opt/lovable-app.
+#
+# Ondersteunt:
+#   - SPA projecten (Vite + React)
+#   - SSR projecten (TanStack Start)
+#   - Drie modi: full / database / frontend
 # ============================================================
 
 RED='\033[0;31m'
@@ -16,7 +19,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-DISTRO_FAMILY=""  # "debian" or "rhel"
+DISTRO_FAMILY=""
 DISTRO_ID=""
 
 INSTALL_MODE=""
@@ -27,8 +30,14 @@ DB_PASSWORD=""
 DASHBOARD_PASSWORD=""
 DB_SERVER_IP=""
 DB_SERVER_ANON_KEY=""
+
+# Twee aparte directories: infra (dit project) en app (gebruikersproject)
+INFRA_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_DIR="/opt/lovable-app"
 SUPABASE_DIR="/opt/supabase"
+
+# Gedetecteerd projecttype: "spa" of "ssr"
+PROJECT_TYPE=""
 
 JWT_SECRET=""
 ANON_KEY=""
@@ -40,9 +49,9 @@ LOGFLARE_API_KEY=""
 print_banner() {
   echo -e "${BLUE}"
   echo "╔══════════════════════════════════════════════╗"
-  echo "║     Lovable VPS Installer v2.0               ║"
-  echo "║     Ubuntu 24 + Self-Hosted Supabase         ║"
-  echo "║     Single / Split Server Support            ║"
+  echo "║     Lovable VPS Installer v3.0               ║"
+  echo "║     Universele Deployment Toolkit             ║"
+  echo "║     SPA + SSR · Single + Split Server         ║"
   echo "╚══════════════════════════════════════════════╝"
   echo -e "${NC}"
 }
@@ -189,28 +198,17 @@ generate_jwt() {
   echo "${header}.${payload}.${signature}"
 }
 
-# --- Clone app ---
+# --- Clone app (het DOEL-project, niet de infra) ---
 clone_app() {
-  log_info "App clonen van GitHub..."
-
-  # --- Checksum van het NU draaiende script opslaan vóór clone ---
-  local current_checksum=""
-  if [[ -f "$0" ]]; then
-    current_checksum=$(sha256sum "$0" 2>/dev/null | cut -d' ' -f1 || true)
-  fi
+  log_info "App-project clonen van GitHub..."
 
   # --- Bestaande map afhandelen ---
   if [[ -d "$APP_DIR" ]]; then
     if [[ -d "$APP_DIR/.git" ]]; then
-      # Geldige repo: gewoon updaten
       log_info "App directory bestaat al met geldige repo, git pull uitvoeren..."
       cd "$APP_DIR" && git pull
-
-      # Self-update check na pull
-      _self_update_check "$current_checksum"
       return
     else
-      # Map bestaat maar is geen geldige repo (eerdere mislukte poging)
       log_warn "Map $APP_DIR bestaat al maar is geen geldige git-repo."
       echo ""
       echo -e "  ${YELLOW}Dit komt meestal door een eerdere mislukte installatie.${NC}"
@@ -218,15 +216,13 @@ clone_app() {
       echo ""
       read -p "  Mag ik $APP_DIR verwijderen en opnieuw clonen? (j/n): " confirm
       if [[ "$confirm" == "j" ]]; then
-        cd /  # Voorkom 'getcwd' fouten door uit de doelmap te gaan
+        cd /
         rm -rf "$APP_DIR"
         log_info "Map verwijderd. Opnieuw clonen..."
       else
         log_error "Kan niet doorgaan met een onvolledige app-map."
         echo "  Verwijder de map handmatig:"
         echo "    cd ~ && sudo rm -rf $APP_DIR"
-        echo "  En draai daarna opnieuw:"
-        echo "    sudo bash /opt/lovable-app/install.sh"
         exit 1
       fi
     fi
@@ -235,22 +231,21 @@ clone_app() {
   # --- Repo URL vragen en clonen ---
   echo ""
   echo -e "${BLUE}Het script gaat nu je app-code clonen van GitHub.${NC}"
-  echo "  Plak de SSH URL van je repo. Die vind je op GitHub → Code → SSH."
+  echo "  Plak de SSH URL van je app-repo. Die vind je op GitHub → Code → SSH."
   echo "  Voorbeeld: git@github.com:JOUW-USER/JOUW-REPO.git"
   echo ""
-  echo -e "  ${YELLOW}⚠ Dit is NIET de inhoud van install.sh — alleen de repo-URL!${NC}"
+  echo -e "  ${YELLOW}⚠ Dit is de URL van je APP-project, niet van de infra-repo!${NC}"
   echo ""
 
   while true; do
     read -p "GitHub repo URL (SSH): " GITHUB_REPO
 
-    # Blokkeer per ongeluk geplakte scriptinhoud
     if [[ -z "$GITHUB_REPO" ]]; then
       log_error "Invoer is leeg. Plak de SSH URL van je GitHub repo."
       continue
     fi
     if [[ "$GITHUB_REPO" == *"#!/bin/bash"* || "$GITHUB_REPO" == *$'\n'* ]]; then
-      log_error "Het lijkt erop dat je de inhoud van install.sh hebt geplakt!"
+      log_error "Het lijkt erop dat je de inhoud van een script hebt geplakt!"
       echo "  Plak alleen de SSH URL, bijv.: git@github.com:user/repo.git"
       continue
     fi
@@ -292,40 +287,29 @@ clone_app() {
   fi
 
   git clone "$GITHUB_REPO" "$APP_DIR"
-
-  # Self-update check na clone
-  _self_update_check "$current_checksum"
 }
 
-# --- Self-update helper: vergelijk checksum van draaiend script met repo-versie ---
-_self_update_check() {
-  local old_checksum="$1"
+# --- Detect project type (SPA vs SSR) ---
+detect_project_type() {
+  log_info "Projecttype detecteren..."
 
-  if [[ -z "$old_checksum" ]]; then
-    log_info "Geen checksum van oorspronkelijk script — self-update overgeslagen."
-    return
+  if [[ ! -f "$APP_DIR/package.json" ]]; then
+    log_error "Geen package.json gevonden in $APP_DIR"
+    echo "  Is dit wel een JavaScript/TypeScript project?"
+    exit 1
   fi
 
-  if [[ ! -f "$APP_DIR/install.sh" ]]; then
-    log_warn "Geen install.sh in repo gevonden — self-update niet mogelijk."
-    return
-  fi
-
-  local new_checksum
-  new_checksum=$(sha256sum "$APP_DIR/install.sh" 2>/dev/null | cut -d' ' -f1 || true)
-
-  if [[ "$old_checksum" != "$new_checksum" ]]; then
-    log_info "Nieuwere install.sh gevonden in repo (checksum verschilt)."
-    log_info "Herstart met bijgewerkte installer..."
-    cp "$APP_DIR/install.sh" /usr/local/bin/lovable-install
-    chmod +x /usr/local/bin/lovable-install
-    exec bash "$APP_DIR/install.sh" "$@"
+  # Check for TanStack Start (SSR)
+  if grep -q '"@tanstack/react-start"' "$APP_DIR/package.json" 2>/dev/null; then
+    PROJECT_TYPE="ssr"
+    log_info "Projecttype: SSR (TanStack Start)"
   else
-    log_info "install.sh is al up-to-date."
+    PROJECT_TYPE="spa"
+    log_info "Projecttype: SPA (Vite + React)"
   fi
 }
 
-# --- Setup Supabase ---
+# --- Setup Supabase (bestanden komen uit INFRA_DIR) ---
 setup_supabase() {
   log_info "Self-hosted Supabase configureren..."
 
@@ -358,61 +342,79 @@ SITE_URL=$api_url
 ADDITIONAL_REDIRECT_URLS=
 ENVEOF
 
-  if [[ ! -f "$APP_DIR/docker-compose.yml" ]]; then
-    log_error "docker-compose.yml niet gevonden in $APP_DIR"
+  # docker-compose.yml en kong.yml komen uit de INFRA-repo, niet uit de app-repo
+  if [[ ! -f "$INFRA_DIR/docker-compose.yml" ]]; then
+    log_error "docker-compose.yml niet gevonden in $INFRA_DIR"
     echo ""
-    echo "  Mogelijke oorzaken:"
-    echo "  1. Je repo bevat geen docker-compose.yml — controleer op GitHub"
-    echo "  2. De installer self-update is niet correct gelukt"
+    echo "  Dit bestand hoort in de infra-repo (dit project) te staan."
+    echo "  Controleer of je de infra-repo correct hebt gecloned."
     echo ""
-    echo "  Bestanden in $APP_DIR:"
-    ls -la "$APP_DIR/" 2>/dev/null || echo "  (map niet gevonden)"
-    echo ""
-    echo "  Oplossing: controleer of docker-compose.yml in de root van je repo staat."
+    echo "  Bestanden in $INFRA_DIR:"
+    ls -la "$INFRA_DIR/" 2>/dev/null || echo "  (map niet gevonden)"
     exit 1
   fi
 
-  cp "$APP_DIR/docker-compose.yml" "$SUPABASE_DIR/docker-compose.yml"
+  cp "$INFRA_DIR/docker-compose.yml" "$SUPABASE_DIR/docker-compose.yml"
 
   mkdir -p "$SUPABASE_DIR/volumes/db/data"
   mkdir -p "$SUPABASE_DIR/volumes/storage"
   mkdir -p "$SUPABASE_DIR/volumes/db/init"
   mkdir -p "$SUPABASE_DIR/volumes/kong"
 
-  if [[ -f "$APP_DIR/volumes/kong/kong.yml" ]]; then
-    cp "$APP_DIR/volumes/kong/kong.yml" "$SUPABASE_DIR/volumes/kong/kong.yml"
+  if [[ -f "$INFRA_DIR/volumes/kong/kong.yml" ]]; then
+    cp "$INFRA_DIR/volumes/kong/kong.yml" "$SUPABASE_DIR/volumes/kong/kong.yml"
   fi
 
+  # Migraties komen uit de APP-repo (als ze bestaan)
   if [[ -d "$APP_DIR/supabase/migrations" ]]; then
-    log_info "Database migraties kopiëren..."
+    log_info "Database migraties kopiëren vanuit app-repo..."
     cp "$APP_DIR/supabase/migrations/"*.sql "$SUPABASE_DIR/volumes/db/init/" 2>/dev/null || true
   fi
 }
 
-# --- Build frontend ---
+# --- Build frontend (SPA of SSR, Dockerfile uit INFRA_DIR) ---
 build_frontend() {
-  log_info "Frontend bouwen..."
+  log_info "Frontend bouwen (type: $PROJECT_TYPE)..."
 
-  local api_url
+  local api_url anon_key
   if [[ "$INSTALL_MODE" == "frontend" ]]; then
     api_url="http://$DB_SERVER_IP:8000"
-    local anon_key="$DB_SERVER_ANON_KEY"
+    anon_key="$DB_SERVER_ANON_KEY"
   else
     if [[ -n "$DOMAIN" ]]; then
       api_url="https://$DOMAIN"
     else
       api_url="http://$(curl -s ifconfig.me)"
     fi
-    local anon_key="$ANON_KEY"
+    anon_key="$ANON_KEY"
   fi
 
+  # .env.production schrijven in de app-directory
   cat > "$APP_DIR/.env.production" <<ENVEOF
 VITE_SUPABASE_URL=$api_url
 VITE_SUPABASE_PUBLISHABLE_KEY=$anon_key
 ENVEOF
 
+  # Selecteer het juiste Dockerfile en kopieer nginx config indien SPA
+  local dockerfile
+  if [[ "$PROJECT_TYPE" == "spa" ]]; then
+    dockerfile="$INFRA_DIR/Dockerfile.spa"
+    # SPA heeft een nginx.conf nodig in de app-dir voor de Docker COPY
+    cp "$INFRA_DIR/nginx/frontend-spa.conf" "$APP_DIR/nginx.conf"
+  else
+    dockerfile="$INFRA_DIR/Dockerfile.ssr"
+  fi
+
+  if [[ ! -f "$dockerfile" ]]; then
+    log_error "Dockerfile niet gevonden: $dockerfile"
+    echo "  Verwacht projecttype: $PROJECT_TYPE"
+    echo "  Controleer of de infra-repo compleet is."
+    exit 1
+  fi
+
+  log_info "Bouwen met: $dockerfile"
   cd "$APP_DIR"
-  docker build -t lovable-frontend -f Dockerfile .
+  docker build -t lovable-frontend -f "$dockerfile" .
 }
 
 # --- Start services ---
@@ -586,7 +588,6 @@ configure_firewall() {
   log_info "Firewall configureren..."
 
   if [[ "$DISTRO_FAMILY" == "rhel" ]]; then
-    # firewalld (CentOS/AlmaLinux/Rocky)
     systemctl enable --now firewalld
     firewall-cmd --permanent --add-service=ssh
     firewall-cmd --permanent --add-service=http
@@ -602,7 +603,6 @@ configure_firewall() {
 
     firewall-cmd --reload
   else
-    # ufw (Ubuntu/Debian)
     ufw --force enable
     ufw allow ssh
     ufw allow http
@@ -621,39 +621,53 @@ configure_firewall() {
 
 # --- Create update script ---
 create_update_script() {
-  cat > "$APP_DIR/update.sh" <<'UPDATEEOF'
+  cat > /usr/local/bin/lovable-update <<UPDATEEOF
 #!/bin/bash
 set -euo pipefail
 
-APP_DIR="/opt/lovable-app"
-SUPABASE_DIR="/opt/supabase"
+INFRA_DIR="$INFRA_DIR"
+APP_DIR="$APP_DIR"
+SUPABASE_DIR="$SUPABASE_DIR"
+PROJECT_TYPE="$PROJECT_TYPE"
 
 echo "=== Lovable App Updater ==="
 echo ""
 
-echo "[1/4] Code ophalen van GitHub..."
-cd "$APP_DIR"
-git pull
+# 1. Update infra-repo
+echo "[1/5] Infra-repo updaten..."
+cd "\$INFRA_DIR" && git pull
 
-echo "[2/4] Frontend opnieuw bouwen..."
-docker build -t lovable-frontend -f Dockerfile .
+# 2. Update app-repo
+echo "[2/5] App-code ophalen van GitHub..."
+cd "\$APP_DIR" && git pull
 
-echo "[3/4] Frontend herstarten..."
+# 3. Rebuild frontend met Dockerfile uit infra-repo
+echo "[3/5] Frontend opnieuw bouwen (type: \$PROJECT_TYPE)..."
+if [[ "\$PROJECT_TYPE" == "spa" ]]; then
+  cp "\$INFRA_DIR/nginx/frontend-spa.conf" "\$APP_DIR/nginx.conf"
+  docker build -t lovable-frontend -f "\$INFRA_DIR/Dockerfile.spa" "\$APP_DIR"
+else
+  docker build -t lovable-frontend -f "\$INFRA_DIR/Dockerfile.ssr" "\$APP_DIR"
+fi
+
+# 4. Restart frontend container
+echo "[4/5] Frontend herstarten..."
 docker stop lovable-frontend 2>/dev/null || true
 docker rm lovable-frontend 2>/dev/null || true
-docker run -d \
-  --name lovable-frontend \
-  --restart unless-stopped \
-  -p 3000:3000 \
+docker run -d \\
+  --name lovable-frontend \\
+  --restart unless-stopped \\
+  -p 3000:3000 \\
   lovable-frontend
 
-echo "[4/4] Database migraties controleren..."
-if [[ -d "$APP_DIR/supabase/migrations" ]]; then
-  cp "$APP_DIR/supabase/migrations/"*.sql "$SUPABASE_DIR/volumes/db/init/" 2>/dev/null || true
-  for migration in "$APP_DIR/supabase/migrations/"*.sql; do
-    if [[ -f "$migration" ]]; then
-      echo "  Migratie: $(basename "$migration")"
-      docker exec supabase-db psql -U supabase -d postgres -f "/docker-entrypoint-initdb.d/$(basename "$migration")" 2>/dev/null || true
+# 5. Database migraties
+echo "[5/5] Database migraties controleren..."
+if [[ -d "\$APP_DIR/supabase/migrations" ]]; then
+  cp "\$APP_DIR/supabase/migrations/"*.sql "\$SUPABASE_DIR/volumes/db/init/" 2>/dev/null || true
+  for migration in "\$APP_DIR/supabase/migrations/"*.sql; do
+    if [[ -f "\$migration" ]]; then
+      echo "  Migratie: \$(basename "\$migration")"
+      docker exec supabase-db psql -U supabase -d postgres -f "/docker-entrypoint-initdb.d/\$(basename "\$migration")" 2>/dev/null || true
     fi
   done
 fi
@@ -662,8 +676,7 @@ echo ""
 echo "✅ Update compleet!"
 UPDATEEOF
 
-  chmod +x "$APP_DIR/update.sh"
-  ln -sf "$APP_DIR/update.sh" /usr/local/bin/lovable-update
+  chmod +x /usr/local/bin/lovable-update
 }
 
 # --- Print summary ---
@@ -679,6 +692,7 @@ print_summary() {
   echo -e "${GREEN}╔══════════════════════════════════════════════╗${NC}"
   echo -e "${GREEN}║         ✅ INSTALLATIE COMPLEET!              ║${NC}"
   echo -e "${GREEN}║         Modus: $(printf '%-30s' "$INSTALL_MODE") ║${NC}"
+  echo -e "${GREEN}║         Type:  $(printf '%-30s' "$PROJECT_TYPE") ║${NC}"
   echo -e "${GREEN}╚══════════════════════════════════════════════╝${NC}"
   echo ""
 
@@ -694,6 +708,7 @@ print_summary() {
 === Lovable Supabase Credentials ===
 Generated: $(date)
 Mode: $INSTALL_MODE
+Project Type: $PROJECT_TYPE
 
 Anon Key: $ANON_KEY
 Service Role Key: $SERVICE_ROLE_KEY
@@ -701,6 +716,9 @@ JWT Secret: $JWT_SECRET
 Database Password: $POSTGRES_PASSWORD
 Dashboard Password: $DASHBOARD_PASSWORD
 Admin Email: $ADMIN_EMAIL
+
+Infra Dir: $INFRA_DIR
+App Dir: $APP_DIR
 CREDEOF
     chmod 600 "$SUPABASE_DIR/credentials.txt"
     log_info "Credentials opgeslagen in: $SUPABASE_DIR/credentials.txt"
@@ -714,6 +732,8 @@ CREDEOF
   fi
 
   echo ""
+  echo -e "  📂 Infra:   ${BLUE}$INFRA_DIR${NC}"
+  echo -e "  📂 App:     ${BLUE}$APP_DIR${NC}"
   echo -e "  🔄 Updates: ${BLUE}lovable-update${NC}"
   echo ""
 }
@@ -726,7 +746,12 @@ main() {
   check_requirements
   gather_input
   install_dependencies
-  clone_app
+
+  # Clone het app-project (de infra-repo is al aanwezig — dat is waar dit script vandaan draait)
+  if [[ "$INSTALL_MODE" != "database" ]]; then
+    clone_app
+    detect_project_type
+  fi
 
   case "$INSTALL_MODE" in
     full)
