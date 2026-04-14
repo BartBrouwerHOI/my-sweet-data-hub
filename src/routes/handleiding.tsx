@@ -460,12 +460,18 @@ cat /tmp/tabel.csv | docker exec -i supabase-db psql -U supabase -d postgres \\
 
       {/* Stap: SMTP & OAuth */}
       <Step id="smtp-oauth" number={steps.findIndex(s => s.id === "smtp-oauth") + 1} title={<><InfoTooltip text="Protocol voor het versturen van e-mails — nodig voor verificatie-mails en wachtwoord-reset." /> & <InfoTooltip text="Inloggen via een derde partij zoals Google — gebruikers hoeven geen apart wachtwoord aan te maken." /> instellen</>}>
-        <Warn>Zonder SMTP staat e-mail autoconfirm aan — iedereen kan zich registreren zonder verificatie. Stel SMTP in voor productie!</Warn>
 
-        <h4 className="font-semibold text-foreground">E-mail (<InfoTooltip text="Protocol voor het versturen van e-mails. Je hebt een SMTP-server nodig om verificatie-mails en wachtwoord-resets te versturen." />)</h4>
-        <Location icon="terminal" text={`Terminal op je ${mode === "split" ? "backend-server (A)" : "VM"}`} />
-        <p>Bewerk de Supabase environment file:</p>
-        <CodeBlock>{`sudo nano /opt/supabase/.env
+        {/* SMTP — Aanbevolen */}
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="rounded bg-destructive px-2 py-0.5 text-xs font-semibold text-destructive-foreground">Aanbevolen voor productie</span>
+            <h4 className="font-semibold text-foreground">E-mail (<InfoTooltip text="Protocol voor het versturen van e-mails. Je hebt een SMTP-server nodig om verificatie-mails en wachtwoord-resets te versturen." />)</h4>
+          </div>
+          <Warn>Zonder SMTP staat e-mail autoconfirm aan — iedereen kan zich registreren zonder verificatie. Stel SMTP in zodra je app live gaat!</Warn>
+
+          <Location icon="terminal" text={`Terminal op je ${mode === "split" ? "backend-server (A)" : "VM"}`} />
+          <p>Bewerk de Supabase environment file:</p>
+          <CodeBlock>{`sudo nano /opt/supabase/.env
 
 # Pas deze regels aan met je eigen SMTP gegevens:
 SMTP_HOST=smtp.gmail.com
@@ -480,21 +486,31 @@ SMTP_SENDER_NAME=Mijn App
 
 # Herstart auth container
 cd /opt/supabase && docker compose restart auth`}</CodeBlock>
-        <Tip>Voor Gmail: gebruik een <a href="https://myaccount.google.com/apppasswords" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">App-wachtwoord</a>, niet je gewone wachtwoord. Je hebt 2FA nodig om een App-wachtwoord aan te maken.</Tip>
+          <Tip>Voor Gmail: gebruik een <a href="https://myaccount.google.com/apppasswords" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">App-wachtwoord</a>, niet je gewone wachtwoord. Je hebt 2FA nodig om een App-wachtwoord aan te maken.</Tip>
+        </div>
 
-        <h4 className="mt-6 font-semibold text-foreground">Google <InfoTooltip text="Inloggen via een derde partij zoals Google — gebruikers hoeven geen apart wachtwoord aan te maken." /> (inloggen met Google)</h4>
-        <Location icon="browser" text="Google Cloud Console" />
-        <ol className="list-inside list-decimal space-y-1">
-          <li>Ga naar <a href="https://console.cloud.google.com" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">Google Cloud Console</a></li>
-          <li>Maak OAuth 2.0 credentials aan (APIs & Services → Credentials)</li>
-          <li>Redirect URI: <code className="rounded bg-muted px-1.5 py-0.5 text-sm">https://jouw-domein.nl/auth/v1/callback</code></li>
-        </ol>
+        {/* Google OAuth — Optioneel */}
+        <div className="mt-6 rounded-lg border border-border bg-muted/30 p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="rounded bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">Optioneel</span>
+            <h4 className="font-semibold text-foreground">Google <InfoTooltip text="Inloggen via een derde partij zoals Google — gebruikers hoeven geen apart wachtwoord aan te maken." /> (inloggen met Google)</h4>
+          </div>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Dit is optioneel. Als je app geen "Inloggen met Google"-knop nodig heeft, kun je deze stap overslaan en doorgaan naar de volgende stap. Je app werkt prima met alleen e-mail/wachtwoord login.
+          </p>
 
-        <Location icon="terminal" text={`Terminal op je ${mode === "split" ? "backend-server (A)" : "VM"}`} />
-        <ol className="list-inside list-decimal space-y-1" start={4}>
-          <li>Voeg de credentials toe aan de Supabase config:</li>
-        </ol>
-        <CodeBlock>{`sudo nano /opt/supabase/.env
+          <Location icon="browser" text="Google Cloud Console" />
+          <ol className="list-inside list-decimal space-y-1">
+            <li>Ga naar <a href="https://console.cloud.google.com" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">Google Cloud Console</a></li>
+            <li>Maak OAuth 2.0 credentials aan (APIs & Services → Credentials)</li>
+            <li>Redirect URI: <code className="rounded bg-muted px-1.5 py-0.5 text-sm">https://jouw-domein.nl/auth/v1/callback</code></li>
+          </ol>
+
+          <Location icon="terminal" text={`Terminal op je ${mode === "split" ? "backend-server (A)" : "VM"}`} />
+          <ol className="list-inside list-decimal space-y-1" start={4}>
+            <li>Voeg de credentials toe aan de Supabase config:</li>
+          </ol>
+          <CodeBlock>{`sudo nano /opt/supabase/.env
 
 # Voeg deze regels toe:
 GOTRUE_EXTERNAL_GOOGLE_ENABLED=true
@@ -504,6 +520,7 @@ GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=https://jouw-domein.nl/auth/v1/callback
 
 # Herstart auth
 cd /opt/supabase && docker compose restart auth`}</CodeBlock>
+        </div>
       </Step>
 
       {/* Stap: Troubleshooting */}
