@@ -41,7 +41,7 @@ run_strict_migrations() {
     if [[ ! -f "$MIGRATIONS_DONE_DIR/$local_name" ]]; then
       echo "  Nieuwe migratie: $local_name"
       if docker exec -i supabase-db bash -c \
-        'PGPASSWORD=$POSTGRES_PASSWORD psql -U supabase -d postgres -h localhost -v ON_ERROR_STOP=1 -X --single-transaction' \
+        'PGPASSWORD=$POSTGRES_PASSWORD psql -U postgres -d postgres -h localhost -v ON_ERROR_STOP=1 -X --single-transaction' \
         < "$migration"; then
         touch "$MIGRATIONS_DONE_DIR/$local_name"
         echo "    ✅ Succesvol"
