@@ -154,11 +154,11 @@ function HandleidingPage() {
         <ul className="list-inside list-disc space-y-1">
           <li><strong>Proxmox host</strong> met voldoende resources</li>
           {mode === "single" ? (
-            <li><strong>Ubuntu 24.04 VM</strong> — minimaal 4GB RAM, 2 vCPU, 20GB disk</li>
+            <li><strong>{distro === "debian" ? "Ubuntu 24.04" : "AlmaLinux 9 / Rocky Linux 9 / CentOS Stream 9"} VM</strong> — minimaal 4GB RAM, 2 vCPU, 20GB disk</li>
           ) : (
             <>
-              <li><strong>Ubuntu 24.04 VM (Server A)</strong> — minimaal 2GB RAM, 2 vCPU, 20GB disk — voor Supabase</li>
-              <li><strong>Ubuntu 24.04 VM (Server B)</strong> — minimaal 2GB RAM, 2 vCPU, 10GB disk — voor de frontend</li>
+              <li><strong>{distro === "debian" ? "Ubuntu 24.04" : "AlmaLinux 9 / Rocky Linux 9"} VM (Server A)</strong> — minimaal 2GB RAM, 2 vCPU, 20GB disk — voor Supabase</li>
+              <li><strong>{distro === "debian" ? "Ubuntu 24.04" : "AlmaLinux 9 / Rocky Linux 9"} VM (Server B)</strong> — minimaal 2GB RAM, 2 vCPU, 10GB disk — voor de frontend</li>
             </>
           )}
           <li><strong><InfoTooltip text="Veilige verbinding met je server op afstand, zoals remote desktop maar dan via tekst." />-toegang</strong> tot de VM{mode === "split" ? "'s" : ""}</li>
