@@ -360,8 +360,15 @@ ENVEOF
 
   if [[ ! -f "$APP_DIR/docker-compose.yml" ]]; then
     log_error "docker-compose.yml niet gevonden in $APP_DIR"
-    log_error "Controleer of je repo dit bestand bevat."
-    log_error "Tip: draai 'sudo bash /opt/lovable-app/install.sh' als je een oudere versie had."
+    echo ""
+    echo "  Mogelijke oorzaken:"
+    echo "  1. Je repo bevat geen docker-compose.yml — controleer op GitHub"
+    echo "  2. De installer self-update is niet correct gelukt"
+    echo ""
+    echo "  Bestanden in $APP_DIR:"
+    ls -la "$APP_DIR/" 2>/dev/null || echo "  (map niet gevonden)"
+    echo ""
+    echo "  Oplossing: controleer of docker-compose.yml in de root van je repo staat."
     exit 1
   fi
 
