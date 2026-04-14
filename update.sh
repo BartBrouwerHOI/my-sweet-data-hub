@@ -59,6 +59,14 @@ if [[ "$INSTALL_MODE" == "database" ]]; then
   echo -e "${GREEN}[1/4]${NC} Infra-repo updaten..."
   cd "$INFRA_DIR" && git pull
 
+  # Init SQL bijwerken met wachtwoorden
+  if [[ -f "$INFRA_DIR/volumes/db/init/00-supabase-init.sql" ]] && [[ -d "$SUPABASE_DIR" ]]; then
+    source "$SUPABASE_DIR/.env"
+    cp "$INFRA_DIR/volumes/db/init/00-supabase-init.sql" "$SUPABASE_DIR/volumes/db/init/00-supabase-init.sql"
+    sed -i "s/CHANGEME/$POSTGRES_PASSWORD/g" "$SUPABASE_DIR/volumes/db/init/00-supabase-init.sql"
+    echo "  Init SQL bijgewerkt met wachtwoorden"
+  fi
+
   if [[ -d "$APP_DIR/.git" ]]; then
     echo -e "${GREEN}[2/4]${NC} App-repo updaten (voor migraties)..."
     cd "$APP_DIR" && git pull
@@ -75,7 +83,7 @@ if [[ "$INSTALL_MODE" == "database" ]]; then
         if [[ ! -f "$MIGRATIONS_DONE_DIR/$local_name" ]]; then
           echo "  Nieuwe migratie: $local_name"
           cp "$migration" "$SUPABASE_DIR/volumes/db/init/$local_name"
-          if docker exec -i supabase-db psql -U supabase -d postgres --single-transaction < "$migration"; then
+          if docker exec -i supabase-db bash -c 'PGPASSWORD=$POSTGRES_PASSWORD psql -U supabase -d postgres -h localhost --single-transaction' < "$migration"; then
             touch "$MIGRATIONS_DONE_DIR/$local_name"
             echo "    ✅ Succesvol"
           else
@@ -145,6 +153,14 @@ echo ""
 echo -e "${GREEN}[1/5]${NC} Infra-repo updaten..."
 cd "$INFRA_DIR" && git pull
 
+# Init SQL bijwerken met wachtwoorden
+if [[ -f "$INFRA_DIR/volumes/db/init/00-supabase-init.sql" ]] && [[ -d "$SUPABASE_DIR" ]]; then
+  source "$SUPABASE_DIR/.env"
+  cp "$INFRA_DIR/volumes/db/init/00-supabase-init.sql" "$SUPABASE_DIR/volumes/db/init/00-supabase-init.sql"
+  sed -i "s/CHANGEME/$POSTGRES_PASSWORD/g" "$SUPABASE_DIR/volumes/db/init/00-supabase-init.sql"
+  echo "  Init SQL bijgewerkt met wachtwoorden"
+fi
+
 echo -e "${GREEN}[2/5]${NC} App-code ophalen van GitHub..."
 cd "$APP_DIR" && git pull
 
@@ -174,7 +190,7 @@ if [[ -d "$APP_DIR/supabase/migrations" ]]; then
       if [[ ! -f "$MIGRATIONS_DONE_DIR/$local_name" ]]; then
         echo "  Nieuwe migratie: $local_name"
         cp "$migration" "$SUPABASE_DIR/volumes/db/init/$local_name"
-        if docker exec -i supabase-db psql -U supabase -d postgres --single-transaction < "$migration"; then
+        if docker exec -i supabase-db bash -c 'PGPASSWORD=$POSTGRES_PASSWORD psql -U supabase -d postgres -h localhost --single-transaction' < "$migration"; then
           touch "$MIGRATIONS_DONE_DIR/$local_name"
           echo "    ✅ Succesvol"
         else
