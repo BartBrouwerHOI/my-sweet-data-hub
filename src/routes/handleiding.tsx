@@ -1175,9 +1175,18 @@ main "\$@"`;
             </button>
           </div>
           <pre className="max-h-96 overflow-auto p-3 text-[10px] leading-relaxed text-foreground"><code>{installScript}</code></pre>
-          <div className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
-            <strong>Gebruik:</strong> Plak dit in een bestand op je server:
-            <code className="ml-1 rounded bg-muted px-1">nano /opt/lovable-app/install.sh</code> → plak → opslaan (Ctrl+O, Enter, Ctrl+X) → <code className="rounded bg-muted px-1">chmod +x install.sh</code>
+          <div className="border-t border-border px-3 py-2 text-xs text-muted-foreground space-y-2">
+            <p className="font-semibold text-foreground">Stap-voor-stap:</p>
+            <div className="space-y-1.5">
+              <p><strong>Stap 1:</strong> Maak het bestand aan op je server:</p>
+              <pre className="rounded bg-muted px-2 py-1 text-[11px]"><code>nano /opt/lovable-app/install.sh</code></pre>
+              <p><strong>Stap 2:</strong> Plak de gekopieerde inhoud in nano → opslaan met <code className="rounded bg-muted px-1">Ctrl+O</code>, <code className="rounded bg-muted px-1">Enter</code>, sluiten met <code className="rounded bg-muted px-1">Ctrl+X</code></p>
+              <p><strong>Stap 3:</strong> Maak uitvoerbaar en start de installatie:</p>
+              <pre className="rounded bg-muted px-2 py-1 text-[11px]"><code>chmod +x /opt/lovable-app/install.sh{"\n"}cd /opt/lovable-app{"\n"}sudo bash install.sh</code></pre>
+            </div>
+            <div className="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 text-yellow-200">
+              <strong>⚠️ Let op:</strong> Gebruik altijd <code className="rounded bg-muted px-1">sudo bash install.sh</code> — niet <code className="rounded bg-muted px-1">sudo install.sh</code> of <code className="rounded bg-muted px-1">./install.sh</code>. Zonder <code className="rounded bg-muted px-1">bash</code> herkent Linux het commando niet.
+            </div>
           </div>
         </div>
       )}
