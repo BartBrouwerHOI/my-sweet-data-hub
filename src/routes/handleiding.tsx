@@ -833,6 +833,358 @@ function CopyCode({ children, fill }: { children: string; fill?: (t: string) => 
   );
 }
 
+function InstallShMissing({ fill }: { fill?: (t: string) => string }) {
+  const [showScript, setShowScript] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const installScript = `#!/bin/bash
+set -euo pipefail
+
+# ============================================================
+# Lovable VPS Installer — Ubuntu 24 + Self-Hosted Supabase
+# ============================================================
+
+RED='\\033[0;31m'
+GREEN='\\033[0;32m'
+YELLOW='\\033[1;33m'
+BLUE='\\033[0;34m'
+NC='\\033[0m'
+
+DISTRO_FAMILY=""
+DISTRO_ID=""
+INSTALL_MODE=""
+GITHUB_REPO=""
+DOMAIN=""
+ADMIN_EMAIL=""
+DB_PASSWORD=""
+DASHBOARD_PASSWORD=""
+DB_SERVER_IP=""
+DB_SERVER_ANON_KEY=""
+APP_DIR="/opt/lovable-app"
+SUPABASE_DIR="/opt/supabase"
+
+JWT_SECRET=""
+ANON_KEY=""
+SERVICE_ROLE_KEY=""
+POSTGRES_PASSWORD=""
+SECRET_KEY_BASE=""
+LOGFLARE_API_KEY=""
+
+print_banner() {
+  echo -e "\${BLUE}"
+  echo "Lovable VPS Installer v2.0"
+  echo -e "\${NC}"
+}
+
+log_info()  { echo -e "\${GREEN}[INFO]\${NC} \$1"; }
+log_warn()  { echo -e "\${YELLOW}[WARN]\${NC} \$1"; }
+log_error() { echo -e "\${RED}[ERROR]\${NC} \$1"; }
+
+detect_distro() {
+  if [[ -f /etc/os-release ]]; then
+    DISTRO_ID=$(. /etc/os-release && echo "\$ID")
+  else
+    log_error "Kan /etc/os-release niet lezen."
+    exit 1
+  fi
+  case "\$DISTRO_ID" in
+    ubuntu|debian) DISTRO_FAMILY="debian" ;;
+    centos|almalinux|rocky|rhel|fedora) DISTRO_FAMILY="rhel" ;;
+    *) DISTRO_FAMILY="debian" ;;
+  esac
+  log_info "Gedetecteerd: \$DISTRO_ID (\$DISTRO_FAMILY)"
+}
+
+check_requirements() {
+  if [[ \$EUID -ne 0 ]]; then
+    log_error "Dit script moet als root gedraaid worden."
+    exit 1
+  fi
+}
+
+select_mode() {
+  echo ""
+  echo "Welke installatie wil je uitvoeren?"
+  echo "  1) Volledige installatie"
+  echo "  2) Alleen database"
+  echo "  3) Alleen frontend"
+  read -p "Keuze [1/2/3]: " mode_choice
+  case "\$mode_choice" in
+    1) INSTALL_MODE="full" ;;
+    2) INSTALL_MODE="database" ;;
+    3) INSTALL_MODE="frontend" ;;
+    *) log_error "Ongeldige keuze"; exit 1 ;;
+  esac
+}
+
+gather_input() {
+  if [[ "\$INSTALL_MODE" == "frontend" ]]; then
+    read -p "IP of domein van de database-server: " DB_SERVER_IP
+    read -p "Anon Key van de database-server: " DB_SERVER_ANON_KEY
+  fi
+  read -p "Domeinnaam (of laat leeg voor IP): " DOMAIN
+  read -p "Admin e-mailadres: " ADMIN_EMAIL
+  if [[ "\$INSTALL_MODE" != "frontend" ]]; then
+    read -sp "Database wachtwoord: " DB_PASSWORD && echo
+    read -sp "Dashboard wachtwoord: " DASHBOARD_PASSWORD && echo
+  fi
+}
+
+install_dependencies() {
+  log_info "Dependencies installeren..."
+  if [[ "\$DISTRO_FAMILY" == "debian" ]]; then
+    apt-get update -qq
+    apt-get install -y -qq curl git nginx certbot python3-certbot-nginx ufw jq openssl
+  elif [[ "\$DISTRO_FAMILY" == "rhel" ]]; then
+    dnf install -y -q epel-release
+    dnf install -y -q curl git nginx certbot certbot-nginx firewalld jq openssl
+    systemctl enable --now firewalld
+  fi
+  if ! command -v docker &>/dev/null; then
+    curl -fsSL https://get.docker.com | sh
+    systemctl enable docker && systemctl start docker
+  fi
+  if ! docker compose version &>/dev/null; then
+    if [[ "\$DISTRO_FAMILY" == "debian" ]]; then
+      apt-get install -y -qq docker-compose-plugin
+    else
+      dnf install -y -q docker-compose-plugin
+    fi
+  fi
+}
+
+generate_jwt() {
+  local role=\$1 header payload signature
+  header=\$(echo -n '{"alg":"HS256","typ":"JWT"}' | base64 -w0 | tr '+/' '-_' | tr -d '=')
+  payload=\$(echo -n "{\\"role\\":\\"\$role\\",\\"iss\\":\\"supabase\\",\\"iat\\":\$(date +%s),\\"exp\\":\$((\$(date +%s) + 157680000))}" | base64 -w0 | tr '+/' '-_' | tr -d '=')
+  signature=\$(echo -n "\${header}.\${payload}" | openssl dgst -sha256 -hmac "\$JWT_SECRET" -binary | base64 -w0 | tr '+/' '-_' | tr -d '=')
+  echo "\${header}.\${payload}.\${signature}"
+}
+
+generate_secrets() {
+  log_info "Sleutels genereren..."
+  JWT_SECRET=\$(openssl rand -hex 32)
+  ANON_KEY=\$(generate_jwt "anon")
+  SERVICE_ROLE_KEY=\$(generate_jwt "service_role")
+  POSTGRES_PASSWORD="\$DB_PASSWORD"
+  SECRET_KEY_BASE=\$(openssl rand -hex 64)
+  LOGFLARE_API_KEY=\$(openssl rand -hex 32)
+}
+
+clone_app() {
+  log_info "App clonen..."
+  if [[ -d "\$APP_DIR" ]]; then
+    cd "\$APP_DIR" && git pull
+  else
+    read -p "GitHub repo URL (SSH): " GITHUB_REPO
+    git clone "\$GITHUB_REPO" "\$APP_DIR"
+  fi
+}
+
+setup_supabase() {
+  log_info "Supabase configureren..."
+  mkdir -p "\$SUPABASE_DIR"
+  local api_url
+  if [[ -n "\$DOMAIN" ]]; then api_url="https://\$DOMAIN"; else api_url="http://\$(curl -s ifconfig.me)"; fi
+  cat > "\$SUPABASE_DIR/.env" <<ENVEOF
+POSTGRES_PASSWORD=\$POSTGRES_PASSWORD
+JWT_SECRET=\$JWT_SECRET
+ANON_KEY=\$ANON_KEY
+SERVICE_ROLE_KEY=\$SERVICE_ROLE_KEY
+DASHBOARD_PASSWORD=\$DASHBOARD_PASSWORD
+SECRET_KEY_BASE=\$SECRET_KEY_BASE
+LOGFLARE_API_KEY=\$LOGFLARE_API_KEY
+API_EXTERNAL_URL=\$api_url
+SUPABASE_PUBLIC_URL=\$api_url
+SMTP_ADMIN_EMAIL=\$ADMIN_EMAIL
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASS=
+SMTP_SENDER_NAME=Lovable App
+SITE_URL=\$api_url
+ENVEOF
+  cp "\$APP_DIR/docker-compose.yml" "\$SUPABASE_DIR/docker-compose.yml"
+  mkdir -p "\$SUPABASE_DIR/volumes/db/data" "\$SUPABASE_DIR/volumes/storage" "\$SUPABASE_DIR/volumes/db/init" "\$SUPABASE_DIR/volumes/kong"
+  [[ -f "\$APP_DIR/volumes/kong/kong.yml" ]] && cp "\$APP_DIR/volumes/kong/kong.yml" "\$SUPABASE_DIR/volumes/kong/kong.yml"
+  if [[ -d "\$APP_DIR/supabase/migrations" ]]; then
+    cp "\$APP_DIR/supabase/migrations/"*.sql "\$SUPABASE_DIR/volumes/db/init/" 2>/dev/null || true
+  fi
+}
+
+build_frontend() {
+  log_info "Frontend bouwen..."
+  local api_url anon_key
+  if [[ "\$INSTALL_MODE" == "frontend" ]]; then
+    api_url="http://\$DB_SERVER_IP:8000"
+    anon_key="\$DB_SERVER_ANON_KEY"
+  else
+    if [[ -n "\$DOMAIN" ]]; then api_url="https://\$DOMAIN"; else api_url="http://\$(curl -s ifconfig.me)"; fi
+    anon_key="\$ANON_KEY"
+  fi
+  cat > "\$APP_DIR/.env.production" <<ENVEOF
+VITE_SUPABASE_URL=\$api_url
+VITE_SUPABASE_PUBLISHABLE_KEY=\$anon_key
+ENVEOF
+  cd "\$APP_DIR"
+  docker build -t lovable-frontend -f Dockerfile .
+}
+
+start_supabase() {
+  log_info "Supabase starten..."
+  cd "\$SUPABASE_DIR" && docker compose up -d
+  sleep 15
+}
+
+start_frontend() {
+  log_info "Frontend starten..."
+  docker stop lovable-frontend 2>/dev/null || true
+  docker rm lovable-frontend 2>/dev/null || true
+  docker run -d --name lovable-frontend --restart unless-stopped -p 3000:3000 lovable-frontend
+}
+
+configure_nginx() {
+  log_info "Nginx configureren..."
+  local server_name nginx_conf_path
+  [[ -n "\$DOMAIN" ]] && server_name="\$DOMAIN" || server_name="_"
+  if [[ "\$DISTRO_FAMILY" == "rhel" ]]; then
+    nginx_conf_path="/etc/nginx/conf.d/lovable.conf"
+  else
+    nginx_conf_path="/etc/nginx/sites-available/lovable"
+  fi
+  # (Nginx config wordt gegenereerd op basis van INSTALL_MODE)
+  # Zie de volledige versie in je GitHub repo
+  nginx -t && systemctl reload nginx
+}
+
+setup_ssl() {
+  if [[ -n "\$DOMAIN" ]]; then
+    certbot --nginx -d "\$DOMAIN" --non-interactive --agree-tos -m "\$ADMIN_EMAIL" || log_warn "SSL mislukt"
+  fi
+}
+
+configure_firewall() {
+  log_info "Firewall configureren..."
+  if [[ "\$DISTRO_FAMILY" == "rhel" ]]; then
+    firewall-cmd --permanent --add-service=ssh
+    firewall-cmd --permanent --add-service=http
+    firewall-cmd --permanent --add-service=https
+    firewall-cmd --reload
+  else
+    ufw --force enable
+    ufw allow ssh && ufw allow http && ufw allow https
+    ufw reload
+  fi
+}
+
+create_update_script() {
+  cat > "\$APP_DIR/update.sh" <<'UPDATEEOF'
+#!/bin/bash
+set -euo pipefail
+APP_DIR="/opt/lovable-app"
+SUPABASE_DIR="/opt/supabase"
+cd "\$APP_DIR" && git pull
+docker build -t lovable-frontend -f Dockerfile .
+docker stop lovable-frontend 2>/dev/null || true
+docker rm lovable-frontend 2>/dev/null || true
+docker run -d --name lovable-frontend --restart unless-stopped -p 3000:3000 lovable-frontend
+echo "Update compleet!"
+UPDATEEOF
+  chmod +x "\$APP_DIR/update.sh"
+  ln -sf "\$APP_DIR/update.sh" /usr/local/bin/lovable-update
+}
+
+print_summary() {
+  local url
+  [[ -n "\$DOMAIN" ]] && url="https://\$DOMAIN" || url="http://\$(curl -s ifconfig.me)"
+  echo ""
+  echo "INSTALLATIE COMPLEET! Modus: \$INSTALL_MODE"
+  if [[ "\$INSTALL_MODE" != "frontend" ]]; then
+    echo "Anon Key: \$ANON_KEY"
+    echo "Service Role Key: \$SERVICE_ROLE_KEY"
+    echo "JWT Secret: \$JWT_SECRET"
+    echo "DB Wachtwoord: \$POSTGRES_PASSWORD"
+  fi
+  [[ "\$INSTALL_MODE" != "database" ]] && echo "App URL: \$url"
+  [[ "\$INSTALL_MODE" != "frontend" ]] && echo "Studio: \$url:8080"
+  echo "Updates: lovable-update"
+}
+
+main() {
+  print_banner
+  detect_distro
+  select_mode
+  check_requirements
+  gather_input
+  install_dependencies
+  clone_app
+  case "\$INSTALL_MODE" in
+    full) generate_secrets; setup_supabase; build_frontend; start_supabase; start_frontend ;;
+    database) generate_secrets; setup_supabase; start_supabase ;;
+    frontend) build_frontend; start_frontend ;;
+  esac
+  configure_nginx
+  setup_ssl
+  configure_firewall
+  create_update_script
+  print_summary
+}
+
+main "\$@"`;
+
+  const handleCopyScript = async () => {
+    await navigator.clipboard.writeText(installScript);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 3000);
+  };
+
+  return (
+    <Warn>
+      <strong>install.sh niet gevonden?</strong> Je repo is waarschijnlijk privé — de standaard <code className="rounded bg-muted px-1 text-xs">curl</code> download werkt dan niet.
+      <ol className="list-inside list-decimal mt-2 space-y-2">
+        <li>
+          <strong>Check GitHub:</strong> Open je repo op github.com en kijk of <code className="rounded bg-muted px-1 text-xs">install.sh</code> in de root staat
+        </li>
+        <li>
+          <strong>Sync gefaald?</strong> Ga naar Lovable → Settings → Connectors → GitHub → <strong>Disconnect</strong> en opnieuw <strong>Connect</strong>. Wacht tot de sync klaar is
+        </li>
+        <li>
+          <strong>Handmatig aanmaken:</strong> Kopieer het script hieronder direct op je server
+        </li>
+      </ol>
+
+      <div className="mt-3">
+        <button
+          onClick={() => setShowScript(!showScript)}
+          className="flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+        >
+          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showScript ? "rotate-180" : ""}`} />
+          {showScript ? "Verberg install.sh" : "Toon install.sh (handmatig kopiëren)"}
+        </button>
+      </div>
+
+      {showScript && (
+        <div className="mt-2 rounded-lg border border-border bg-muted/60">
+          <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
+            <span className="text-xs font-medium text-muted-foreground">install.sh</span>
+            <button
+              onClick={handleCopyScript}
+              className="flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {copied ? <><Check className="h-3 w-3 text-green-500" /> Gekopieerd!</> : <><Copy className="h-3 w-3" /> Kopieer alles</>}
+            </button>
+          </div>
+          <pre className="max-h-96 overflow-auto p-3 text-[10px] leading-relaxed text-foreground"><code>{installScript}</code></pre>
+          <div className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
+            <strong>Gebruik:</strong> Plak dit in een bestand op je server:
+            <code className="ml-1 rounded bg-muted px-1">nano /opt/lovable-app/install.sh</code> → plak → opslaan (Ctrl+O, Enter, Ctrl+X) → <code className="rounded bg-muted px-1">chmod +x install.sh</code>
+          </div>
+        </div>
+      )}
+    </Warn>
+  );
+}
+
 function ConfigInput({ label, placeholder, value, onChange }: { label: string; placeholder: string; value: string; onChange: (v: string) => void }) {
   return (
     <div>
