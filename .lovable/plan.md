@@ -1,47 +1,40 @@
 
 
-## Plan: Privé repo fix + betere fallback voor install.sh
+## Plan: Duidelijkere instructies voor handmatig aanmaken + uitvoeren van install.sh
 
-### Probleem 1: curl fallback werkt niet voor privé repo's
+### Probleem
 
-De handleiding suggereert `curl -O https://raw.githubusercontent.com/...` als fallback, maar dit werkt **alleen voor publieke repo's**. Jouw repo (BartBrouwerHOI/Access-Guardian) is privé — curl haalt dan een 404-pagina op (14 bytes).
-
-### Probleem 2: install.sh ontbreekt in de GitHub repo
-
-De Lovable sync staat op "Connected" maar het bestand is niet in de repo gepusht. Dit kan komen doordat de sync bepaalde bestanden overslaat, of doordat er een sync-probleem is.
+Uit de screenshot blijkt:
+1. De gebruiker maakt `install.sh` aan met `nano`, maar voert daarna `sudo install.sh` of `install.sh` uit — dat geeft "command not found" omdat het geen `bash` ervoor zet
+2. De `InstallShMissing` component vertelt wel hoe je het bestand moet plakken/opslaan, maar het run-commando staat er niet duidelijk onder als apart kopieerbaar commando
 
 ### Oplossing
 
-**In `src/routes/handleiding.tsx`:**
+**In `src/routes/handleiding.tsx` — component `InstallShMissing` (regel 1178-1181):**
 
-1. **Curl fallback vervangen** door instructies die werken voor privé repo's:
-   - Optie A: Gebruik `curl` met een GitHub Personal Access Token (PAT) voor privé repo's
-   - Optie B: Kopieer het script handmatig — toon een "Kopieer install.sh" knop op de handleiding-pagina zelf die de volledige inhoud van `install.sh` toont/kopieert
-   - Optie C: Gebruik `gh` CLI (GitHub CLI) die al geauthenticeerd kan zijn
+De huidige "Gebruik:" tekst onderaan het collapsible blok is:
+> `nano /opt/lovable-app/install.sh` → plak → opslaan → `chmod +x install.sh`
 
-2. **"Sync troubleshooting" blok uitbreiden** met concrete stappen:
-   - Controleer of de Lovable sync daadwerkelijk bestanden pusht (kijk naar recente commits op GitHub)
-   - Als install.sh ontbreekt: disconnect en reconnect de GitHub connector
-   - Als dat niet werkt: gebruik de handmatige kopie-optie
+Dit vervangen door een duidelijke stap-voor-stap met het run-commando als apart code block:
 
-3. **Volledige inhoud van install.sh beschikbaar maken** op de handleiding-pagina via een expandable/collapsible sectie, zodat gebruikers het altijd handmatig kunnen kopiëren — onafhankelijk van GitHub sync of repo-toegang.
+**Nieuwe instructie (3 stappen):**
+1. Maak het bestand aan: `nano /opt/lovable-app/install.sh`
+2. Plak de inhoud → opslaan met Ctrl+O, Enter, Ctrl+X
+3. Maak uitvoerbaar en start:
+
+```bash
+chmod +x /opt/lovable-app/install.sh
+sudo bash /opt/lovable-app/install.sh
+```
+
+Het run-commando (`sudo bash install.sh`) wordt een apart `<CodeBlock>` zodat het kopieerbaar en onmisbaar zichtbaar is — niet langer verborgen in een tekstregel.
+
+Daarnaast een `<Warn>` toevoegen:
+> **Let op:** Gebruik altijd `sudo bash install.sh` — niet `sudo install.sh` of `./install.sh`. Zonder `bash` herkent Linux het commando niet.
 
 ### Wijzigingen
 
 | Bestand | Actie |
 |---------|-------|
-| `src/routes/handleiding.tsx` | Curl fallback updaten voor privé repos (3 plekken); expandable "install.sh handmatig kopiëren" sectie toevoegen |
-
-### Details
-
-**Curl met token (voor privé repos):**
-```bash
-curl -H "Authorization: token JOUW_GITHUB_TOKEN" -O https://raw.githubusercontent.com/JOUW-USER/JOUW-REPO/main/install.sh
-```
-
-**Fallback volgorde (nieuw):**
-1. Controleer of install.sh in de repo staat (GitHub website)
-2. Zo niet: disconnect/reconnect Lovable GitHub sync
-3. Zo niet: kopieer install.sh handmatig vanaf de handleiding-pagina (collapsible code block met de volledige inhoud van install.sh)
-4. Of gebruik curl met een Personal Access Token voor privé repos
+| `src/routes/handleiding.tsx` | InstallShMissing component: vervang de "Gebruik:" regel (regel 1178-1181) door duidelijke stappen met apart kopieerbaar run-commando + waarschuwing over `bash` |
 
