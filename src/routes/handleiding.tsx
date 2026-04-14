@@ -22,7 +22,7 @@ function HandleidingPage() {
   const [distro, setDistro] = useState<Distro>("debian");
 
   const [userConfig, setUserConfig] = useState({
-    infraUrl: "",
+    infraUrl: "https://github.com/BartBrouwerHOI/my-sweet-data-hub",
     appUser: "",
     appRepo: "",
     serverIp: "",
@@ -37,7 +37,7 @@ function HandleidingPage() {
         const parsed = JSON.parse(saved);
         // Migrate old format (drop infraUser/infraRepo if present)
         setUserConfig({
-          infraUrl: parsed.infraUrl || "",
+          infraUrl: parsed.infraUrl || "https://github.com/BartBrouwerHOI/my-sweet-data-hub",
           appUser: parsed.appUser || parsed.githubUser || "",
           appRepo: parsed.appRepo || parsed.repoName || "",
           serverIp: parsed.serverIp || "",
