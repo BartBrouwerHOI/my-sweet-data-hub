@@ -30,9 +30,9 @@ Het script detecteert automatisch of je app een **SPA** (Vite + React) of **SSR*
 # 1. Clone de infra-repo
 sudo mkdir -p /opt/lovable-infra
 sudo chown $USER:$USER /opt/lovable-infra
-git clone git@github.com:JOUW-USER/JOUW-INFRA-REPO.git /opt/lovable-infra
+git clone git@github.com:INFRA-USER/INFRA-REPO.git /opt/lovable-infra
 
-# 2. Start de installer
+# 2. Start de installer (vraagt om je APP-repo URL)
 sudo bash /opt/lovable-infra/install.sh
 ```
 
