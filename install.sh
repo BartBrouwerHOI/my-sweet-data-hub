@@ -331,7 +331,7 @@ server {
 }
 NGINXEOF
   else
-    # Full: alles
+    # Full: alles via Kong (API Gateway)
     cat > /etc/nginx/sites-available/lovable <<NGINXEOF
 server {
     listen 80;
@@ -340,27 +340,30 @@ server {
 
     location / {
         proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
     }
 
     location /auth/ {
-        proxy_pass http://127.0.0.1:9999/;
+        proxy_pass http://127.0.0.1:8000/auth/v1/;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
     }
 
     location /rest/ {
-        proxy_pass http://127.0.0.1:3001/;
+        proxy_pass http://127.0.0.1:8000/rest/v1/;
         proxy_set_header Host \$host;
         proxy_set_header Authorization \$http_authorization;
         proxy_set_header apikey \$http_apikey;
     }
 
     location /realtime/ {
-        proxy_pass http://127.0.0.1:4000/;
+        proxy_pass http://127.0.0.1:8000/realtime/v1/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -368,7 +371,7 @@ server {
     }
 
     location /storage/ {
-        proxy_pass http://127.0.0.1:5000/;
+        proxy_pass http://127.0.0.1:8000/storage/v1/;
         proxy_set_header Host \$host;
     }
 

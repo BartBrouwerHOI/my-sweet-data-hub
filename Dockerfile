@@ -1,5 +1,5 @@
 # === Lovable Frontend Build ===
-# Multi-stage build: Node.js build → Nginx static serving
+# Multi-stage build: Node.js build → Node.js server (TanStack Start SSR)
 
 # Stage 1: Build
 FROM node:20-alpine AS builder
@@ -18,18 +18,22 @@ RUN bun install --frozen-lockfile || npm install
 # Copy source
 COPY . .
 
-# Build the app
+# Build the app (TanStack Start outputs to .output/)
 RUN npm run build
 
-# Stage 2: Serve with Nginx
-FROM nginx:alpine
+# Stage 2: Run with Node.js
+FROM node:20-alpine
 
-# Copy built assets
-COPY --from=builder /app/.output/public /usr/share/nginx/html
+WORKDIR /app
 
-# Copy nginx config for SPA routing
-COPY nginx/frontend.conf /etc/nginx/conf.d/default.conf
+# Copy built output and node_modules
+COPY --from=builder /app/.output ./.output
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
 
-EXPOSE 80
+EXPOSE 3000
 
-CMD ["nginx", "-g", "daemon off;"]
+ENV HOST=0.0.0.0
+ENV PORT=3000
+
+CMD ["node", ".output/server/index.mjs"]
