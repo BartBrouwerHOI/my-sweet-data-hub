@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Copy, Check, Terminal, Globe, Monitor } from "lucide-react";
+import { Copy, Check, Terminal, Globe, Monitor, Info } from "lucide-react";
 
 export const Route = createFileRoute("/handleiding")({
   head: () => ({
@@ -58,7 +58,7 @@ function HandleidingPage() {
         <h2 className="mb-2 text-sm font-semibold text-foreground">📖 Voordat je begint</h2>
         <p className="mb-2 text-sm text-muted-foreground">
           In deze handleiding voer je commando's uit op je server via een <strong className="text-foreground">terminal</strong>. 
-          Dit doe je door via SSH verbinding te maken met je VM:
+          Dit doe je door via <InfoTooltip text="Veilige verbinding met je server op afstand, zoals remote desktop maar dan via tekst. Je typt commando's en ziet de output." /> verbinding te maken met je VM:
         </p>
         <CodeBlock>{`ssh root@JOUW-SERVER-IP`}</CodeBlock>
         <p className="text-sm text-muted-foreground">
@@ -125,7 +125,7 @@ function HandleidingPage() {
               <li><strong>Ubuntu 24.04 VM (Server B)</strong> — minimaal 2GB RAM, 2 vCPU, 10GB disk — voor de frontend</li>
             </>
           )}
-          <li><strong>SSH-toegang</strong> tot de VM{mode === "split" ? "'s" : ""}</li>
+          <li><strong><InfoTooltip text="Veilige verbinding met je server op afstand, zoals remote desktop maar dan via tekst." />-toegang</strong> tot de VM{mode === "split" ? "'s" : ""}</li>
           <li><strong>Privé GitHub repo</strong> met je Lovable project (te vinden op <a href="https://github.com" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">github.com</a>)</li>
           <li><strong>Domeinnaam</strong> (optioneel, kan ook op IP)</li>
         </ul>
@@ -137,7 +137,7 @@ function HandleidingPage() {
       {/* Stap: Architectuur */}
       <Step id="architectuur" number={steps.findIndex(s => s.id === "architectuur") + 1} title="Architectuur">
         <Tip>
-          <strong>Wat is Supabase?</strong> Supabase is een complete backend-stack: PostgreSQL (database), GoTrue (authenticatie/login), PostgREST (API), Storage (bestanden) en Realtime (websockets). Al deze services draaien als Docker containers op je server.
+          <strong>Wat is Supabase?</strong> Supabase is een complete backend-stack: <InfoTooltip text="De database waar al je data in wordt opgeslagen — tabellen, gebruikers, alles." /> (database), <InfoTooltip text="Supabase service die login, registratie en wachtwoord-reset regelt." /> (authenticatie), <InfoTooltip text="Zet je database automatisch om naar een REST API — je hoeft geen backend-code te schrijven." /> (API), Storage (bestanden) en Realtime (websockets). Al deze services draaien als <InfoTooltip text="Software die in een afgesloten 'doos' draait, zodat het overal hetzelfde werkt — ongeacht het besturingssysteem." /> op je server.
         </Tip>
 
         {mode === "single" ? (
@@ -158,6 +158,12 @@ function HandleidingPage() {
     ├── Storage (bestanden)
     ├── Realtime (websockets)
     └── Studio (admin dashboard, poort 8080)`}</CodeBlock>
+            <div className="my-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              <span><InfoTooltip text="Webserver die bezoekers doorstuurt naar de juiste service op basis van de URL (reverse proxy)." /> = reverse proxy</span>
+              <span><InfoTooltip text="API Gateway — controleert of API-verzoeken een geldige sleutel (API key) hebben voordat ze worden doorgestuurd." /> = API Gateway</span>
+              <span><InfoTooltip text="Versleutelde verbinding (https) zodat data veilig verstuurd wordt. Gratis via Let's Encrypt." /> = versleuteling</span>
+              <span><InfoTooltip text="Tool om meerdere Docker containers tegelijk te starten en beheren met één configuratiebestand." /> = container orchestratie</span>
+            </div>
           </>
         ) : (
           <>
@@ -178,14 +184,19 @@ function HandleidingPage() {
 │   ├── /           → localhost:3000 (frontend)
 │   └── /auth, /rest, /storage, /realtime → Server A:8000
 └── .env → VITE_SUPABASE_URL wijst naar Server A`}</CodeBlock>
+            <div className="my-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              <span><InfoTooltip text="Webserver die bezoekers doorstuurt naar de juiste service (reverse proxy)." /> = reverse proxy</span>
+              <span><InfoTooltip text="API Gateway — controleert of API-verzoeken een geldige sleutel hebben." /> = API Gateway</span>
+              <span><InfoTooltip text="Bepaalt welke poorten open of dicht staan op je server — beschermt tegen ongewenste toegang." /> = firewall</span>
+            </div>
           </>
         )}
       </Step>
 
       {/* Stap: Deploy key */}
-      <Step id="deploy-key" number={steps.findIndex(s => s.id === "deploy-key") + 1} title="GitHub deploy key instellen">
+      <Step id="deploy-key" number={steps.findIndex(s => s.id === "deploy-key") + 1} title={<>GitHub <InfoTooltip text="Een SSH-sleutel die alleen leesrechten heeft op één specifieke GitHub repo. Hiermee kan je server de code downloaden zonder wachtwoord." /> instellen</>}>
         <p>
-          Een <strong>deploy key</strong> is een SSH-sleutel waarmee je server je privé GitHub repo kan downloaden zonder wachtwoord. 
+          Een <strong>deploy key</strong> is een <InfoTooltip text="Veilige verbinding met je server op afstand, zoals remote desktop maar dan via tekst." />-sleutel waarmee je server je privé GitHub repo kan downloaden zonder wachtwoord. 
           Je maakt een sleutel aan op je server en voegt het publieke deel toe aan GitHub.
         </p>
         {mode === "split" && (
@@ -243,12 +254,12 @@ sudo bash install.sh`}</CodeBlock>
           <ul className="list-inside list-disc space-y-1">
             <li><strong>Installatiemodus</strong> — kies <code className="rounded bg-muted px-1.5 py-0.5 text-sm">1) Volledige installatie</code></li>
             <li><strong>Domeinnaam</strong> — bijv. <code className="rounded bg-muted px-1.5 py-0.5 text-sm">mijnapp.nl</code> of laat leeg voor IP</li>
-            <li><strong>Admin e-mail</strong> — voor het SSL certificaat (Let's Encrypt)</li>
+            <li><strong>Admin e-mail</strong> — voor het <InfoTooltip text="Versleutelde verbinding (https) zodat data veilig verstuurd wordt. Let's Encrypt geeft gratis SSL-certificaten uit." /> certificaat</li>
             <li><strong>Database wachtwoord</strong> — kies iets sterks, je hebt dit later nodig</li>
             <li><strong>Dashboard wachtwoord</strong> — voor Supabase Studio (admin paneel)</li>
           </ul>
-          <p className="mt-2">Het script doet de rest: Docker installeren, secrets genereren, containers starten, Nginx + SSL configureren.</p>
-          <Warn>Het script zet <code className="rounded bg-muted px-1.5 py-0.5 text-sm">GOTRUE_MAILER_AUTOCONFIRM: true</code>. Dit bevestigt e-mailadressen automatisch zonder verificatie-email. Voor productie: stel SMTP in (stap {steps.findIndex(s => s.id === "smtp-oauth") + 1}) en zet dit op <code className="rounded bg-muted px-1.5 py-0.5 text-sm">false</code>.</Warn>
+          <p className="mt-2">Het script doet de rest: <InfoTooltip text="Software die in een afgesloten 'doos' draait, zodat het overal hetzelfde werkt — ongeacht het besturingssysteem." /> installeren, secrets genereren, containers starten, <InfoTooltip text="Webserver die bezoekers doorstuurt naar de juiste service (reverse proxy)." /> + SSL configureren.</p>
+          <Warn>Het script zet <code className="rounded bg-muted px-1.5 py-0.5 text-sm">GOTRUE_MAILER_AUTOCONFIRM: true</code>. Dit bevestigt e-mailadressen automatisch zonder verificatie-email. Voor productie: stel <InfoTooltip text="Protocol voor het versturen van e-mails — nodig voor verificatie-mails en wachtwoord-reset." /> in (stap {steps.findIndex(s => s.id === "smtp-oauth") + 1}) en zet dit op <code className="rounded bg-muted px-1.5 py-0.5 text-sm">false</code>.</Warn>
         </Step>
       )}
 
@@ -265,15 +276,15 @@ cd /opt/lovable-app
 sudo bash install.sh
 
 # Kies: 2) Alleen database (Supabase stack)`}</CodeBlock>
-          <p>Het script start alle Supabase containers en Kong (API Gateway op poort 8000).</p>
+          <p>Het script start alle Supabase containers en <InfoTooltip text="API Gateway — controleert of API-verzoeken een geldige sleutel hebben voordat ze worden doorgestuurd naar de juiste service." /> (API Gateway op poort 8000).</p>
 
-          <h4 className="mt-4 font-semibold text-foreground">Firewall instellen</h4>
+          <h4 className="mt-4 font-semibold text-foreground"><InfoTooltip text="Bepaalt welke poorten open of dicht staan op je server — beschermt tegen ongewenste toegang van buitenaf." /> instellen</h4>
           <p>Beperk toegang tot de API Gateway zodat alleen Server B erbij kan:</p>
           <CodeBlock>{`# Vervang SERVER_B_IP met het IP-adres van je frontend-server
 # Voorbeeld: sudo ufw allow from 192.168.1.20 to any port 8000
 sudo ufw allow from SERVER_B_IP to any port 8000`}</CodeBlock>
           <Warn>
-            <strong>Belangrijk!</strong> Noteer de <strong>Anon Key</strong> die het script aan het einde toont — 
+            <strong>Belangrijk!</strong> Noteer de <strong><InfoTooltip text="Publieke sleutel waarmee de frontend met de Supabase API praat. Dit is geen geheim — hij wordt in de browser gebruikt." /></strong> die het script aan het einde toont — 
             die heb je nodig bij het installeren van Server B. Je vindt deze ook terug in <code className="rounded bg-muted px-1.5 py-0.5 text-xs">/opt/supabase/credentials.txt</code>.
           </Warn>
           <Warn>Zet poort 8000 <strong>niet</strong> open voor iedereen. Beperk het tot het IP van Server B.</Warn>
@@ -295,7 +306,7 @@ sudo bash install.sh
 # Kies: 3) Alleen frontend
 # Voer het IP-adres van Server A in wanneer gevraagd
 # Voer de Anon Key in die je bij Server A hebt genoteerd`}</CodeBlock>
-          <p>Het script bouwt de React app als Docker container, configureert Nginx als reverse proxy en regelt SSL.</p>
+          <p>Het script bouwt de React app als <InfoTooltip text="Software die in een afgesloten 'doos' draait, zodat het overal hetzelfde werkt." />, configureert <InfoTooltip text="Webserver die bezoekers doorstuurt naar de juiste service (reverse proxy)." /> als reverse proxy en regelt SSL.</p>
         </Step>
       )}
 
@@ -400,15 +411,15 @@ scp tabel.csv root@jouw-server:/tmp/
 # Vervang "tabel_naam" met de naam van je tabel
 cat /tmp/tabel.csv | docker exec -i supabase-db psql -U supabase -d postgres \\
   -c "\\COPY public.tabel_naam FROM STDIN WITH CSV HEADER"`}</CodeBlock>
-        <Tip>Het <code className="rounded bg-muted px-1.5 py-0.5 text-xs">scp</code>-commando draai je op je eigen computer (niet op de server). Het kopieert een bestand via SSH naar de server.</Tip>
+        <Tip>Het <InfoTooltip text="Bestanden kopiëren tussen je computer en een server via SSH — zoals slepen naar een USB-stick, maar dan over het netwerk." />-commando draai je op je eigen computer (niet op de server). Het kopieert een bestand via SSH naar de server.</Tip>
         <Warn>Gebruikerswachtwoorden kunnen niet gemigreerd worden. Gebruikers moeten een wachtwoord-reset doen na migratie.</Warn>
       </Step>
 
       {/* Stap: SMTP & OAuth */}
-      <Step id="smtp-oauth" number={steps.findIndex(s => s.id === "smtp-oauth") + 1} title="SMTP & OAuth instellen">
+      <Step id="smtp-oauth" number={steps.findIndex(s => s.id === "smtp-oauth") + 1} title={<><InfoTooltip text="Protocol voor het versturen van e-mails — nodig voor verificatie-mails en wachtwoord-reset." /> & <InfoTooltip text="Inloggen via een derde partij zoals Google — gebruikers hoeven geen apart wachtwoord aan te maken." /> instellen</>}>
         <Warn>Zonder SMTP staat e-mail autoconfirm aan — iedereen kan zich registreren zonder verificatie. Stel SMTP in voor productie!</Warn>
 
-        <h4 className="font-semibold text-foreground">E-mail (SMTP)</h4>
+        <h4 className="font-semibold text-foreground">E-mail (<InfoTooltip text="Protocol voor het versturen van e-mails. Je hebt een SMTP-server nodig om verificatie-mails en wachtwoord-resets te versturen." />)</h4>
         <Location icon="terminal" text={`Terminal op je ${mode === "split" ? "backend-server (A)" : "VM"}`} />
         <p>Bewerk de Supabase environment file:</p>
         <CodeBlock>{`sudo nano /opt/supabase/.env
@@ -428,7 +439,7 @@ SMTP_SENDER_NAME=Mijn App
 cd /opt/supabase && docker compose restart auth`}</CodeBlock>
         <Tip>Voor Gmail: gebruik een <a href="https://myaccount.google.com/apppasswords" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">App-wachtwoord</a>, niet je gewone wachtwoord. Je hebt 2FA nodig om een App-wachtwoord aan te maken.</Tip>
 
-        <h4 className="mt-6 font-semibold text-foreground">Google OAuth (inloggen met Google)</h4>
+        <h4 className="mt-6 font-semibold text-foreground">Google <InfoTooltip text="Inloggen via een derde partij zoals Google — gebruikers hoeven geen apart wachtwoord aan te maken." /> (inloggen met Google)</h4>
         <Location icon="browser" text="Google Cloud Console" />
         <ol className="list-inside list-decimal space-y-1">
           <li>Ga naar <a href="https://console.cloud.google.com" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">Google Cloud Console</a></li>
@@ -484,7 +495,7 @@ docker exec supabase-db pg_dump -U supabase -Fc postgres > /opt/backups/backup_$
 # Restore (terugzetten)
 docker exec -i supabase-db psql -U supabase -d postgres < /opt/backups/backup_20240101.sql`}</CodeBlock>
 
-        <CodeBlock title="Automatische backup (cron)">{`# Open de cron-editor
+        <CodeBlock title={<>Automatische backup (<InfoTooltip text="Geplande taken die automatisch draaien op vaste tijden — zoals een wekker voor je server." />)</>}>{`# Open de cron-editor
 sudo crontab -e
 
 # Voeg deze regel toe (dagelijkse backup om 3:00 's nachts):
@@ -492,7 +503,7 @@ sudo crontab -e
 
         <CodeBlock title="Storage backup (geüploade bestanden)">{`# Supabase Storage bestanden backuppen
 tar -czf /opt/backups/storage_backup_$(date +%Y%m%d).tar.gz /opt/supabase/volumes/storage/`}</CodeBlock>
-        <Tip>Bewaar backups op een andere locatie — gebruik <code className="rounded bg-muted px-1.5 py-0.5 text-xs">rsync</code> of <code className="rounded bg-muted px-1.5 py-0.5 text-xs">scp</code> naar een andere Proxmox VM of externe opslag.</Tip>
+        <Tip>Bewaar backups op een andere locatie — gebruik <code className="rounded bg-muted px-1.5 py-0.5 text-xs">rsync</code> of <InfoTooltip text="Bestanden kopiëren tussen je computer en een server via SSH." /> naar een andere Proxmox VM of externe opslag.</Tip>
       </Step>
 
       <footer className="mt-16 border-t border-border pt-8 pb-12 text-center text-sm text-muted-foreground">
@@ -504,7 +515,18 @@ tar -czf /opt/backups/storage_backup_$(date +%Y%m%d).tar.gz /opt/supabase/volume
 
 /* ── Helper components ── */
 
-function Step({ id, number, title, children }: { id: string; number: number; title: string; children: React.ReactNode }) {
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <span className="relative inline-flex items-center group cursor-help align-baseline">
+      <Info className="h-3.5 w-3.5 text-muted-foreground/60 group-hover:text-primary transition-colors" />
+      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-60 rounded-md border border-border bg-popover p-2.5 text-xs leading-relaxed text-popover-foreground shadow-md z-50 pointer-events-none">
+        {text}
+      </span>
+    </span>
+  );
+}
+
+function Step({ id, number, title, children }: { id: string; number: number; title: React.ReactNode; children: React.ReactNode }) {
   return (
     <section id={id} className="mb-14 scroll-mt-20">
       <h3 className="mb-4 flex items-baseline gap-3 text-xl font-semibold text-foreground">
@@ -528,7 +550,7 @@ function Location({ icon, text }: { icon: "terminal" | "browser" | "computer"; t
   );
 }
 
-function CodeBlock({ children, title }: { children: string; title?: string }) {
+function CodeBlock({ children, title }: { children: string; title?: React.ReactNode }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
