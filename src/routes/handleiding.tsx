@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useCallback } from "react";
-import { Copy, Check, Terminal, Globe, Monitor, Info, Settings, ChevronDown } from "lucide-react";
+import { Copy, Check, Terminal, Globe, Monitor, Info, Settings } from "lucide-react";
 
 export const Route = createFileRoute("/handleiding")({
   head: () => ({
@@ -21,10 +21,7 @@ function HandleidingPage() {
   const [mode, setMode] = useState<SetupMode>("single");
   const [distro, setDistro] = useState<Distro>("debian");
 
-  // User config fields with localStorage persistence
   const [userConfig, setUserConfig] = useState({
-    infraUser: "",
-    infraRepo: "",
     appUser: "",
     appRepo: "",
     serverIp: "",
@@ -35,7 +32,17 @@ function HandleidingPage() {
   useEffect(() => {
     try {
       const saved = localStorage.getItem("handleiding-config");
-      if (saved) setUserConfig(JSON.parse(saved));
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Migrate old format (drop infraUser/infraRepo if present)
+        setUserConfig({
+          appUser: parsed.appUser || parsed.githubUser || "",
+          appRepo: parsed.appRepo || parsed.repoName || "",
+          serverIp: parsed.serverIp || "",
+          domain: parsed.domain || "",
+          serverAIp: parsed.serverAIp || "",
+        });
+      }
     } catch {}
   }, []);
 
@@ -49,8 +56,6 @@ function HandleidingPage() {
 
   const fill = useCallback((text: string): string => {
     let result = text;
-    if (userConfig.infraUser) result = result.replace(/INFRA-USER/g, userConfig.infraUser);
-    if (userConfig.infraRepo) result = result.replace(/INFRA-REPO/g, userConfig.infraRepo);
     if (userConfig.appUser) result = result.replace(/APP-USER/g, userConfig.appUser);
     if (userConfig.appRepo) result = result.replace(/APP-REPO/g, userConfig.appRepo);
     if (userConfig.serverIp) result = result.replace(/JOUW-SERVER-IP/g, userConfig.serverIp);
@@ -175,7 +180,7 @@ function HandleidingPage() {
         </p>
       </div>
 
-      {/* User config form */}
+      {/* User config form — simplified: only app + server */}
       <div className="mb-10 rounded-lg border border-primary/30 bg-primary/5 p-5">
         <div className="mb-3 flex items-center gap-2">
           <Settings className="h-4 w-4 text-primary" />
@@ -185,16 +190,10 @@ function HandleidingPage() {
           Vul je gegevens in — alle commando's in de handleiding worden automatisch aangepast zodat je ze direct kunt kopiëren en plakken.
         </p>
 
-        <p className="mb-2 text-xs font-semibold text-foreground uppercase tracking-wide">🔧 Infra-repo <span className="font-normal text-muted-foreground">(dit project — installer, Dockerfiles, Supabase stack)</span></p>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 mb-4">
-          <ConfigInput label="GitHub gebruiker (infra)" placeholder="INFRA-USER" value={userConfig.infraUser} onChange={v => updateField("infraUser", v)} />
-          <ConfigInput label="Repository naam (infra)" placeholder="INFRA-REPO" value={userConfig.infraRepo} onChange={v => updateField("infraRepo", v)} />
-        </div>
-
         <p className="mb-2 text-xs font-semibold text-foreground uppercase tracking-wide">📦 App-repo <span className="font-normal text-muted-foreground">(jouw Lovable project dat je wilt deployen)</span></p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 mb-4">
-          <ConfigInput label="GitHub gebruiker (app)" placeholder="APP-USER" value={userConfig.appUser} onChange={v => updateField("appUser", v)} />
-          <ConfigInput label="Repository naam (app)" placeholder="APP-REPO" value={userConfig.appRepo} onChange={v => updateField("appRepo", v)} />
+          <ConfigInput label="GitHub gebruiker" placeholder="APP-USER" value={userConfig.appUser} onChange={v => updateField("appUser", v)} />
+          <ConfigInput label="Repository naam" placeholder="APP-REPO" value={userConfig.appRepo} onChange={v => updateField("appRepo", v)} />
         </div>
 
         <p className="mb-2 text-xs font-semibold text-foreground uppercase tracking-wide">🖥️ Server</p>
@@ -245,16 +244,19 @@ function HandleidingPage() {
       {/* Stap: Architectuur */}
       <Step id="architectuur" number={steps.findIndex(s => s.id === "architectuur") + 1} title="Architectuur">
         <Tip>
-          <strong>Wat is Supabase?</strong> Supabase is een complete backend-stack: <InfoTooltip text="De database waar al je data in wordt opgeslagen — tabellen, gebruikers, alles." /> (database), <InfoTooltip text="Supabase service die login, registratie en wachtwoord-reset regelt." /> (authenticatie), <InfoTooltip text="Zet je database automatisch om naar een REST API — je hoeft geen backend-code te schrijven." /> (API), Storage (bestanden) en Realtime (websockets). Al deze services draaien als <InfoTooltip text="Software die in een afgesloten 'doos' draait, zodat het overal hetzelfde werkt — ongeacht het besturingssysteem." /> op je server.
+          <strong>Twee repo's, één server.</strong> De <strong>infra-repo</strong> (dit project) is publiek en bevat de installer, Dockerfiles en Supabase stack. 
+          Je <strong>app-repo</strong> is je privé Lovable project. Het install-script koppelt ze aan elkaar.
         </Tip>
+        <CodeBlock fill={fill}>{`/opt/lovable-infra/  ← Infra-repo (publiek, via HTTPS gecloned)
+│  install.sh, Dockerfile.spa, Dockerfile.ssr, docker-compose.yml
+│
+/opt/lovable-app/   ← App-repo (privé, via SSH deploy key)
+│  package.json, src/, supabase/migrations/`}</CodeBlock>
 
         {mode === "single" ? (
           <>
             <p>Alles draait op één VM:</p>
             <CodeBlock fill={fill}>{`[VM - 4GB RAM]
-├── /opt/lovable-infra/  ← Infra-repo (installer, Dockerfiles, Supabase stack)
-├── /opt/lovable-app/    ← App-repo (jouw Lovable project)
-│
 ├── Nginx (SSL termination + reverse proxy)
 │   ├── /           → Frontend container (poort 3000)
 │   └── /auth, /rest, /storage, /realtime → Kong API Gateway (poort 8000)
@@ -304,11 +306,11 @@ function HandleidingPage() {
         )}
       </Step>
 
-      {/* Stap: Deploy key */}
+      {/* Stap: Deploy key — alleen voor de app-repo */}
       <Step id="deploy-key" number={steps.findIndex(s => s.id === "deploy-key") + 1} title={<>GitHub <InfoTooltip text="Een SSH-sleutel die alleen leesrechten heeft op één specifieke GitHub repo. Hiermee kan je server de code downloaden zonder wachtwoord." /> instellen <StepBadge type="verplicht" /></>}>
         <p>
-          Een <strong>deploy key</strong> is een <InfoTooltip text="Veilige verbinding met je server op afstand, zoals remote desktop maar dan via tekst." />-sleutel waarmee je server je privé GitHub repo's kan downloaden zonder wachtwoord. 
-          Je maakt één sleutel aan op je server en voegt het publieke deel toe aan <strong>beide</strong> GitHub repo's (infra + app).
+          De infra-repo is <strong>publiek</strong> en wordt via HTTPS gecloned — daar heb je geen sleutel voor nodig. 
+          Voor je <strong>privé app-repo</strong> maak je een deploy key aan zodat je server de code kan downloaden.
         </p>
         {mode === "split" && (
           <Warn>Herhaal deze stap op <strong>beide servers</strong> (A en B). Elke server krijgt een eigen sleutel.</Warn>
@@ -318,49 +320,22 @@ function HandleidingPage() {
         <CodeBlock fill={fill} title="1. SSH key genereren">{`# Genereer een nieuwe SSH key (druk Enter bij alle vragen)
 ssh-keygen -t ed25519 -C "deploy@vps" -f ~/.ssh/deploy_key -N ""
 
-# Stel de juiste permissions in (sommige SSH-versies weigeren te brede rechten)
+# Stel de juiste permissions in
 chmod 600 ~/.ssh/deploy_key
 
 # Toon de publieke key — kopieer de hele output
 cat ~/.ssh/deploy_key.pub`}</CodeBlock>
 
-        <Location icon="browser" text="GitHub.com — BEIDE repo's" />
-        <Warn>
-          <strong>Let op:</strong> Je hebt <strong>twee</strong> repo's die de server moet kunnen benaderen:
-          <ul className="mt-1 ml-4 list-disc space-y-0.5">
-            <li><strong>Infra-repo</strong> — <CopyCode fill={fill}>INFRA-USER/INFRA-REPO</CopyCode> (dit project)</li>
-            <li><strong>App-repo</strong> — <CopyCode fill={fill}>APP-USER/APP-REPO</CopyCode> (jouw Lovable project)</li>
-          </ul>
-          Voeg dezelfde publieke key toe aan <strong>beide</strong> repo's. GitHub staat dezelfde deploy key niet toe op twee repo's — 
-          gebruik dan een <a href="https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys#machine-users" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">machine user</a> of 
-          een <a href="https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">Personal Access Token (PAT)</a>.
-        </Warn>
-
-        <p className="font-medium">Optie A: Deploy keys (als beide repo's van dezelfde eigenaar zijn)</p>
+        <Location icon="browser" text="GitHub.com — je app-repo" />
         <ol className="list-inside list-decimal space-y-1">
-          <li>Ga naar <strong>Infra-repo</strong> op GitHub → <strong>Settings</strong> → <strong>Deploy keys</strong> → <strong>Add deploy key</strong></li>
-          <li>Naam: "VPS infra{mode === "split" ? " - Server A" : ""}" — plak de publieke key</li>
-          <li>Herhaal voor de <strong>App-repo</strong> met naam "VPS app{mode === "split" ? " - Server A" : ""}"</li>
-          <li>Laat <strong>"Allow write access"</strong> uitgevinkt bij beide</li>
-        </ol>
-        <Tip>
-          <strong>Tip:</strong> Als GitHub de key weigert omdat hij al op de andere repo staat, genereer dan een tweede key:
-          <CodeBlock fill={fill}>{`ssh-keygen -t ed25519 -C "deploy-app@vps" -f ~/.ssh/deploy_key_app -N ""`}</CodeBlock>
-          En pas de SSH config aan (zie hieronder) om per host de juiste key te gebruiken.
-        </Tip>
-
-        <p className="mt-3 font-medium">Optie B: Personal Access Token (makkelijkst bij meerdere repo's)</p>
-        <ol className="list-inside list-decimal space-y-1">
-          <li>Ga naar <a href="https://github.com/settings/tokens?type=beta" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">GitHub → Settings → Developer settings → Fine-grained tokens</a></li>
-          <li>Maak een token met <strong>Contents: Read-only</strong> toegang tot beide repo's</li>
-          <li>Clone dan met HTTPS in plaats van SSH:
-            <CodeBlock fill={fill}>{`git clone https://github.com/INFRA-USER/INFRA-REPO.git /opt/lovable-infra
-git clone https://github.com/APP-USER/APP-REPO.git /opt/lovable-app`}</CodeBlock>
-          </li>
+          <li>Ga naar je app-repo op GitHub: <CopyCode fill={fill}>APP-USER/APP-REPO</CopyCode></li>
+          <li>Ga naar <strong>Settings</strong> → <strong>Deploy keys</strong> → <strong>Add deploy key</strong></li>
+          <li>Naam: <CopyCode fill={fill}>{`VPS deploy${mode === "split" ? " - Server A" : ""}`}</CopyCode> — plak de publieke key</li>
+          <li>Laat <strong>"Allow write access"</strong> uitgevinkt</li>
         </ol>
 
         <Location icon="terminal" text={`Terminal op je ${mode === "split" ? "server" : "VM"}`} />
-        <CodeBlock fill={fill} title="2. SSH config aanmaken (bij deploy keys)">{`# Maak een SSH config zodat git de juiste key gebruikt
+        <CodeBlock fill={fill} title="2. SSH config aanmaken">{`# Maak een SSH config zodat git de juiste key gebruikt
 cat > ~/.ssh/config << 'EOF'
 Host github.com
   IdentityFile ~/.ssh/deploy_key
@@ -370,10 +345,10 @@ chmod 600 ~/.ssh/config`}</CodeBlock>
 
         <Warn>
           Als je al andere SSH keys hebt (bijv. <CopyCode fill={fill}>id_ed25519</CopyCode> of <CopyCode fill={fill}>id_rsa</CopyCode>), kan SSH die per ongeluk gebruiken in plaats van je deploy key. 
-          De regel <CopyCode fill={fill}>IdentitiesOnly yes</CopyCode> in de config hierboven voorkomt dit. Controleer met: <CopyCode fill={fill}>ls ~/.ssh/*.pub</CopyCode>
+          De regel <CopyCode fill={fill}>IdentitiesOnly yes</CopyCode> in de config hierboven voorkomt dit.
         </Warn>
 
-        <CodeBlock fill={fill} title="3. Verbinding testen">{`# Test de verbinding — bekijk welke key SSH aanbiedt
+        <CodeBlock fill={fill} title="3. Verbinding testen">{`# Test de verbinding
 ssh -vT git@github.com 2>&1 | grep "Offering\\|authenticated"
 
 # Als bovenstaande niet werkt, forceer de deploy key:
@@ -397,17 +372,12 @@ ssh -T -i ~/.ssh/deploy_key git@github.com`}</CodeBlock>
               <tr className="border-t border-border">
                 <td className="px-3 py-2 font-mono text-xs">"Repository not found"</td>
                 <td className="px-3 py-2">SSH werkt, maar de key heeft geen toegang tot deze repo</td>
-                <td className="px-3 py-2">Controleer of de deploy key aan <strong>beide</strong> repo's is toegevoegd</td>
+                <td className="px-3 py-2">Controleer of de deploy key aan je app-repo is toegevoegd</td>
               </tr>
               <tr className="border-t border-border">
                 <td className="px-3 py-2 font-mono text-xs">"Permission denied (publickey)"</td>
                 <td className="px-3 py-2">SSH kan helemaal niet authenticeren</td>
                 <td className="px-3 py-2">De key wordt niet gevonden — controleer <CopyCode fill={fill}>~/.ssh/config</CopyCode> en <CopyCode fill={fill}>chmod 600</CopyCode></td>
-              </tr>
-              <tr className="border-t border-border">
-                <td className="px-3 py-2 font-mono text-xs">"Key is already in use"</td>
-                <td className="px-3 py-2">GitHub staat dezelfde deploy key niet toe op twee repo's</td>
-                <td className="px-3 py-2">Genereer een tweede key of gebruik een Personal Access Token (optie B hierboven)</td>
               </tr>
             </tbody>
           </table>
@@ -419,28 +389,19 @@ ssh -T -i ~/.ssh/deploy_key git@github.com`}</CodeBlock>
         <Step id="installatie" number={steps.findIndex(s => s.id === "installatie") + 1} title={<>Installatie <StepBadge type="verplicht" /></>}>
           <Location icon="terminal" text="Terminal op je VM" />
 
-          <Tip>
-            <strong>Hoe werkt het?</strong> Dit project is de <strong>infrastructuur-laag</strong> (installer, Supabase stack, Dockerfiles). 
-            Je app-code wordt apart gecloned. Zo kun je dezelfde infra gebruiken voor elk Lovable-project.
-          </Tip>
-
-          <p><strong>Stap 1:</strong> Clone de <strong>infra-repo</strong> (dit project — installer, Dockerfiles, Supabase stack):</p>
-          <Warn>Gebruik <strong>niet</strong> <CopyCode fill={fill}>sudo git clone</CopyCode> — sudo draait als root en heeft geen toegang tot jouw SSH key.</Warn>
-          <CodeBlock fill={fill}>{`# Maak de map aan en geef jezelf rechten
+          <p><strong>Stap 1:</strong> Clone de <strong>infra-repo</strong> (publiek, geen key nodig):</p>
+          <CodeBlock fill={fill}>{`# Clone de infra-repo via HTTPS (geen deploy key nodig)
 sudo mkdir -p /opt/lovable-infra
 sudo chown $USER:$USER /opt/lovable-infra
-
-# Clone de INFRA-repo (dit project met installer + Supabase stack)
-git clone git@github.com:INFRA-USER/INFRA-REPO.git /opt/lovable-infra`}</CodeBlock>
+git clone https://github.com/lovable-vps/lovable-infra.git /opt/lovable-infra`}</CodeBlock>
 
           <p><strong>Stap 2:</strong> Start de installer:</p>
-          <CodeBlock fill={fill}>{`# Start de installer
-sudo bash /opt/lovable-infra/install.sh`}</CodeBlock>
+          <CodeBlock fill={fill}>{`sudo bash /opt/lovable-infra/install.sh`}</CodeBlock>
 
           <p>Het script vraagt om:</p>
           <ul className="list-inside list-disc space-y-1">
             <li><strong>Installatiemodus</strong> — kies <CopyCode fill={fill}>1) Volledige installatie</CopyCode></li>
-            <li><strong>Domeinnaam</strong> — bijv. <CopyCode fill={fill}>mijnapp.nl</CopyCode> of laat leeg voor IP</li>
+            <li><strong>Domeinnaam</strong> — bijv. <CopyCode fill={fill}>jouw-domein.nl</CopyCode> of laat leeg voor IP</li>
             <li><strong>Admin e-mail</strong> — voor het <InfoTooltip text="Versleutelde verbinding (https) zodat data veilig verstuurd wordt. Let's Encrypt geeft gratis SSL-certificaten uit." /> certificaat</li>
             <li><strong>Database wachtwoord</strong> — kies iets sterks, je hebt dit later nodig</li>
             <li><strong>Dashboard wachtwoord</strong> — voor Supabase Studio (admin paneel)</li>
@@ -462,13 +423,10 @@ sudo bash /opt/lovable-infra/install.sh`}</CodeBlock>
         <Step id="split-backend" number={steps.findIndex(s => s.id === "split-backend") + 1} title="Server A — Supabase backend">
           <Location icon="terminal" text="Terminal op Server A" />
           <p>Op Server A draai je de volledige Supabase stack (database, login, API, opslag):</p>
-          <Warn>Gebruik <strong>niet</strong> <CopyCode fill={fill}>sudo git clone</CopyCode> — sudo draait als root en heeft geen toegang tot jouw SSH key.</Warn>
-          <CodeBlock fill={fill}>{`# Maak de map aan en geef jezelf rechten
+          <CodeBlock fill={fill}>{`# Clone de infra-repo via HTTPS (geen deploy key nodig)
 sudo mkdir -p /opt/lovable-infra
 sudo chown $USER:$USER /opt/lovable-infra
-
-# Clone de INFRA-repo (dit project)
-git clone git@github.com:INFRA-USER/INFRA-REPO.git /opt/lovable-infra
+git clone https://github.com/lovable-vps/lovable-infra.git /opt/lovable-infra
 
 # Start de installer
 sudo bash /opt/lovable-infra/install.sh
@@ -480,11 +438,9 @@ sudo bash /opt/lovable-infra/install.sh
           <p>Beperk toegang tot de API Gateway zodat alleen Server B erbij kan:</p>
           {distro === "debian" ? (
             <CodeBlock fill={fill}>{`# Vervang SERVER_B_IP met het IP-adres van je frontend-server
-# Voorbeeld: sudo ufw allow from 192.168.1.20 to any port 8000
 sudo ufw allow from SERVER_B_IP to any port 8000`}</CodeBlock>
           ) : (
             <CodeBlock fill={fill}>{`# Vervang SERVER_B_IP met het IP-adres van je frontend-server
-# Voorbeeld: sudo firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address=192.168.1.20 port port=8000 protocol=tcp accept'
 sudo firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address=SERVER_B_IP port port=8000 protocol=tcp accept'
 sudo firewall-cmd --reload`}</CodeBlock>
           )}
@@ -501,12 +457,10 @@ sudo firewall-cmd --reload`}</CodeBlock>
         <Step id="split-frontend" number={steps.findIndex(s => s.id === "split-frontend") + 1} title="Server B — React frontend">
           <Location icon="terminal" text="Terminal op Server B" />
           <p>Op Server B draait alleen de React app — geen database, geen Supabase services:</p>
-          <CodeBlock fill={fill}>{`# Maak de map aan en geef jezelf rechten
+          <CodeBlock fill={fill}>{`# Clone de infra-repo via HTTPS (geen deploy key nodig)
 sudo mkdir -p /opt/lovable-infra
 sudo chown $USER:$USER /opt/lovable-infra
-
-# Clone de INFRA-repo (dit project)
-git clone git@github.com:INFRA-USER/INFRA-REPO.git /opt/lovable-infra
+git clone https://github.com/lovable-vps/lovable-infra.git /opt/lovable-infra
 
 # Start de installer
 sudo bash /opt/lovable-infra/install.sh
@@ -601,7 +555,7 @@ done`}</CodeBlock>
 
       {/* Stap: Data migratie */}
       <Step id="data-migratie" number={steps.findIndex(s => s.id === "data-migratie") + 1} title={<>Data migreren uit Lovable Cloud <StepBadge type="optioneel" /></>}>
-        <p className="italic text-muted-foreground">Alleen nodig als je bestaande data hebt in Lovable Cloud. Start je een nieuwe app zonder bestaande data? Sla deze stap over en ga door naar de volgende.</p>
+        <p className="italic text-muted-foreground">Alleen nodig als je bestaande data hebt in Lovable Cloud. Start je een nieuwe app zonder bestaande data? Sla deze stap over.</p>
         <p>Als je bestaande data hebt in Lovable Cloud kun je die overzetten:</p>
 
         <Location icon="browser" text="Lovable.dev in je browser" />
@@ -619,17 +573,16 @@ done`}</CodeBlock>
 scp tabel.csv root@jouw-server:/tmp/
 
 # Importeer in PostgreSQL (draai dit op de SERVER)
-# Vervang "tabel_naam" met de naam van je tabel
 cat /tmp/tabel.csv | docker exec -i supabase-db psql -U supabase -d postgres \\
   -c "\\COPY public.tabel_naam FROM STDIN WITH CSV HEADER"`}</CodeBlock>
-        <Tip>Het <InfoTooltip text="Bestanden kopiëren tussen je computer en een server via SSH — zoals slepen naar een USB-stick, maar dan over het netwerk." />-commando draai je op je eigen computer (niet op de server). Het kopieert een bestand via SSH naar de server.</Tip>
+        <Tip>Het <InfoTooltip text="Bestanden kopiëren tussen je computer en een server via SSH — zoals slepen naar een USB-stick, maar dan over het netwerk." />-commando draai je op je eigen computer (niet op de server).</Tip>
         <Warn>Gebruikerswachtwoorden kunnen niet gemigreerd worden. Gebruikers moeten een wachtwoord-reset doen na migratie.</Warn>
       </Step>
 
       {/* Stap: SMTP & OAuth */}
       <Step id="smtp-oauth" number={steps.findIndex(s => s.id === "smtp-oauth") + 1} title={<><InfoTooltip text="Protocol voor het versturen van e-mails — nodig voor verificatie-mails en wachtwoord-reset." /> & <InfoTooltip text="Inloggen via een derde partij zoals Google — gebruikers hoeven geen apart wachtwoord aan te maken." /> instellen</>}>
 
-        {/* SMTP — Aanbevolen */}
+        {/* SMTP */}
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
           <div className="mb-2 flex items-center gap-2">
             <span className="rounded bg-destructive px-2 py-0.5 text-xs font-semibold text-destructive-foreground">Aanbevolen voor productie</span>
@@ -657,14 +610,14 @@ cd /opt/supabase && docker compose restart auth`}</CodeBlock>
           <Tip>Voor Gmail: gebruik een <a href="https://myaccount.google.com/apppasswords" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">App-wachtwoord</a>, niet je gewone wachtwoord. Je hebt 2FA nodig om een App-wachtwoord aan te maken.</Tip>
         </div>
 
-        {/* Google OAuth — Optioneel */}
+        {/* Google OAuth */}
         <div className="mt-6 rounded-lg border border-border bg-muted/30 p-4">
           <div className="mb-2 flex items-center gap-2">
             <span className="rounded bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">Optioneel</span>
             <h4 className="font-semibold text-foreground">Google <InfoTooltip text="Inloggen via een derde partij zoals Google — gebruikers hoeven geen apart wachtwoord aan te maken." /> (inloggen met Google)</h4>
           </div>
           <p className="mb-3 text-sm text-muted-foreground">
-            Dit is optioneel. Als je app geen "Inloggen met Google"-knop nodig heeft, kun je deze stap overslaan en doorgaan naar de volgende stap. Je app werkt prima met alleen e-mail/wachtwoord login.
+            Optioneel. Als je app geen "Inloggen met Google"-knop nodig heeft, kun je deze stap overslaan. Je app werkt prima met alleen e-mail/wachtwoord login.
           </p>
 
           <Location icon="browser" text="Google Cloud Console" />
@@ -704,9 +657,9 @@ cd /opt/supabase && docker compose restart auth`}</CodeBlock>
             <TroubleItem q="Frontend kan Server A niet bereiken" a="Check firewall op Server A: sudo ufw status. Test verbinding: curl http://SERVER_A_IP:8000/rest/v1/. Poort 8000 moet open staan voor het IP van Server B." />
           )}
           <TroubleItem q="'Permission denied' bij commando's" a="Gebruik sudo voor commando's die root-rechten nodig hebben, bijv: sudo bash install.sh" />
-          <TroubleItem q="'destination path /opt/lovable-app already exists and is not an empty directory'" a="De map bestaat al van een eerdere (mislukte) poging. Verwijder hem: cd ~ && sudo rm -rf /opt/lovable-app — en draai dan opnieuw: sudo bash /opt/lovable-app/install.sh. Het bijgewerkte install-script vraagt dit nu automatisch." />
-          <TroubleItem q="'getcwd: cannot access parent directories'" a="Je staat in een map die net verwijderd is. Typ eerst: cd ~ (of cd /root) om naar een bestaande map te gaan, en probeer dan je commando opnieuw." />
-          <TroubleItem q="'bash: install.sh: No such file or directory'" a="Je staat niet in de juiste map, of de map is verwijderd. Gebruik altijd het volledige pad: sudo bash /opt/lovable-app/install.sh. Als de map niet meer bestaat, clone je repo opnieuw." />
+          <TroubleItem q="'destination path /opt/lovable-app already exists'" a="De map bestaat al van een eerdere poging. Verwijder hem: cd ~ && sudo rm -rf /opt/lovable-app — en draai dan opnieuw: sudo bash /opt/lovable-infra/install.sh. Het install-script vraagt dit nu automatisch." />
+          <TroubleItem q="'getcwd: cannot access parent directories'" a="Je staat in een map die net verwijderd is. Typ eerst: cd ~ om naar een bestaande map te gaan, en probeer dan opnieuw." />
+          <TroubleItem q="'bash: install.sh: No such file or directory'" a="Je staat niet in de juiste map, of de map is verwijderd. Gebruik altijd het volledige pad: sudo bash /opt/lovable-infra/install.sh" />
           <TroubleItem q="SSH werkt als gebruiker maar niet met sudo" a="sudo draait als root en gebruikt /root/.ssh/. Kopieer je key: sudo cp ~/.ssh/deploy_key /root/.ssh/deploy_key && sudo cp ~/.ssh/config /root/.ssh/config. Test daarna: sudo ssh -T git@github.com" />
         </div>
       </Step>
@@ -715,14 +668,13 @@ cd /opt/supabase && docker compose restart auth`}</CodeBlock>
       <Step id="backup" number={steps.findIndex(s => s.id === "backup") + 1} title="Backup">
         <Location icon="terminal" text={`Terminal op je ${mode === "split" ? "backend-server (A)" : "VM"}`} />
 
-        {/* Database dump — Aanbevolen */}
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
           <div className="mb-2 flex items-center gap-2">
             <span className="rounded bg-destructive px-2 py-0.5 text-xs font-semibold text-destructive-foreground">Aanbevolen</span>
             <h4 className="font-semibold text-foreground">Database backup</h4>
           </div>
           <p>Maak regelmatig backups van je database:</p>
-        <CodeBlock fill={fill} title="Database dump">{`# Maak eerst de backup-map aan
+          <CodeBlock fill={fill} title="Database dump">{`# Maak eerst de backup-map aan
 sudo mkdir -p /opt/backups
 
 # Volledige backup
@@ -733,10 +685,8 @@ docker exec supabase-db pg_dump -U supabase -Fc postgres > /opt/backups/backup_$
 
 # Restore (terugzetten)
 docker exec -i supabase-db psql -U supabase -d postgres < /opt/backups/backup_20240101.sql`}</CodeBlock>
-
         </div>
 
-        {/* Automatische backup + Storage — Optioneel */}
         <div className="mt-4 rounded-lg border border-border bg-muted/30 p-4">
           <div className="mb-2 flex items-center gap-2">
             <span className="rounded bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">Optioneel</span>
@@ -744,13 +694,13 @@ docker exec -i supabase-db psql -U supabase -d postgres < /opt/backups/backup_20
           </div>
           <p className="mb-3 text-sm text-muted-foreground">Handig maar niet strikt noodzakelijk. Je kunt deze stap overslaan als je handmatige backups maakt.</p>
 
-        <CodeBlock fill={fill} title={<>Automatische backup (<InfoTooltip text="Geplande taken die automatisch draaien op vaste tijden — zoals een wekker voor je server." />)</>}>{`# Open de cron-editor
+          <CodeBlock fill={fill} title={<>Automatische backup (<InfoTooltip text="Geplande taken die automatisch draaien op vaste tijden — zoals een wekker voor je server." />)</>}>{`# Open de cron-editor
 sudo crontab -e
 
 # Voeg deze regel toe (dagelijkse backup om 3:00 's nachts):
 0 3 * * * mkdir -p /opt/backups && docker exec supabase-db pg_dump -U supabase -Fc postgres > /opt/backups/db_$(date +\\%Y\\%m\\%d).dump 2>&1`}</CodeBlock>
 
-        <CodeBlock fill={fill} title="Storage backup (geüploade bestanden)">{`# Supabase Storage bestanden backuppen
+          <CodeBlock fill={fill} title="Storage backup (geüploade bestanden)">{`# Supabase Storage bestanden backuppen
 tar -czf /opt/backups/storage_backup_$(date +%Y%m%d).tar.gz /opt/supabase/volumes/storage/`}</CodeBlock>
         </div>
 
@@ -880,8 +830,6 @@ function CopyCode({ children, fill }: { children: string; fill?: (t: string) => 
   );
 }
 
-// InstallShMissing component removed — no longer needed with infra/app split architecture.
-// The infra-repo always contains install.sh.
 function ConfigInput({ label, placeholder, value, onChange }: { label: string; placeholder: string; value: string; onChange: (v: string) => void }) {
   return (
     <div>
