@@ -408,16 +408,63 @@ ENVEOF
   fi
 }
 
+# --- Wait for Supabase bootstrap to complete (auth schema, roles, etc.) ---
+wait_for_bootstrap() {
+  log_info "Wachten tot Supabase bootstrap compleet is (schema's + rollen)..."
+  local max_wait=120
+  local waited=0
+
+  while [ $waited -lt $max_wait ]; do
+    local check_result
+    check_result=$(docker exec supabase-db bash -c \
+      "PGPASSWORD=\$POSTGRES_PASSWORD psql -U supabase -d postgres -h localhost -tAX -c \"
+        SELECT CASE
+          WHEN (SELECT COUNT(*) FROM pg_namespace WHERE nspname IN ('auth','storage')) = 2
+           AND (SELECT COUNT(*) FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role','supabase_admin')) = 4
+          THEN 'READY' ELSE 'WAITING' END;
+      \"" 2>/dev/null || echo "WAITING")
+
+    if [[ "$check_result" == *"READY"* ]]; then
+      log_info "Bootstrap compleet (na ${waited}s)"
+      return 0
+    fi
+    sleep 2
+    waited=$((waited + 2))
+  done
+
+  log_error "Supabase bootstrap niet compleet na ${max_wait}s!"
+  echo ""
+  echo "  Ontbrekende objecten in de database. Controleer of alle containers draaien:"
+  echo "    docker ps"
+  echo "    docker logs supabase-auth"
+  echo "    docker logs supabase-db"
+  echo ""
+  echo "  Als dit een herinstallatie is, reset dan eerst de database:"
+  echo "    cd $SUPABASE_DIR && docker compose down -v"
+  echo "    rm -rf $SUPABASE_DIR/volumes/db/data"
+  echo "    Draai daarna install.sh opnieuw."
+  echo ""
+  return 1
+}
+
 # --- Run migrations after Supabase is healthy ---
 run_migrations() {
   if [[ ! -d "$APP_DIR/supabase/migrations" ]]; then return; fi
 
-  log_info "Wachten tot GoTrue/Auth klaar is (10s)..."
-  sleep 10
+  # Wacht tot bootstrap klaar is (auth schema, rollen, etc.)
+  if ! wait_for_bootstrap; then
+    log_error "Migraties overgeslagen — bootstrap niet compleet."
+    return 1
+  fi
+
+  # Extra wachttijd voor GoTrue om zijn eigen migraties in auth schema te draaien
+  log_info "Wachten tot GoTrue auth-tabellen aanmaakt (15s)..."
+  sleep 15
 
   log_info "Database migraties uitvoeren..."
   mkdir -p "$SUPABASE_DIR/.migrations_done"
 
+  local failed=0
   for migration in "$APP_DIR/supabase/migrations/"*.sql; do
     [[ -f "$migration" ]] || continue
     local name
@@ -425,15 +472,28 @@ run_migrations() {
     if [[ ! -f "$SUPABASE_DIR/.migrations_done/$name" ]]; then
       log_info "  Migratie: $name"
       if docker exec -i supabase-db bash -c \
-        'PGPASSWORD=$POSTGRES_PASSWORD psql -U supabase -d postgres -h localhost --single-transaction' \
+        'PGPASSWORD=$POSTGRES_PASSWORD psql -U supabase -d postgres -h localhost -v ON_ERROR_STOP=1 -X --single-transaction' \
         < "$migration"; then
         touch "$SUPABASE_DIR/.migrations_done/$name"
         echo "    ✅ Succesvol"
       else
-        echo "    ❌ Mislukt — controleer handmatig"
+        echo "    ❌ Mislukt — stoppen bij eerste fout"
+        echo ""
+        echo "  De migratie '$name' is mislukt."
+        echo "  Los het probleem op en draai daarna: lovable-update"
+        echo "  Of reset de database volledig:"
+        echo "    cd $SUPABASE_DIR && docker compose down -v"
+        echo "    rm -rf $SUPABASE_DIR/volumes/db/data $SUPABASE_DIR/.migrations_done"
+        echo "    sudo bash $INFRA_DIR/install.sh"
+        failed=1
+        break
       fi
     fi
   done
+
+  if [[ $failed -eq 0 ]]; then
+    log_info "Alle migraties succesvol uitgevoerd!"
+  fi
 }
 
 # --- Build frontend (SPA of SSR, Dockerfile uit INFRA_DIR) ---
@@ -481,24 +541,55 @@ ENVEOF
   docker build -t lovable-frontend -f "$dockerfile" .
 }
 
+# --- Detect dirty database state ---
+check_dirty_db() {
+  if [[ -d "$SUPABASE_DIR/volumes/db/data" ]] && [[ "$(ls -A "$SUPABASE_DIR/volumes/db/data" 2>/dev/null)" ]]; then
+    log_warn "Bestaande database-data gevonden in $SUPABASE_DIR/volumes/db/data"
+    echo ""
+    echo -e "  ${YELLOW}Init-scripts draaien alleen bij een lege data-directory.${NC}"
+    echo "  Als je een eerdere mislukte installatie opnieuw wilt doen,"
+    echo "  moet je eerst de data resetten:"
+    echo ""
+    echo "    cd $SUPABASE_DIR && docker compose down -v"
+    echo "    rm -rf $SUPABASE_DIR/volumes/db/data"
+    echo "    rm -rf $SUPABASE_DIR/.migrations_done"
+    echo ""
+    read -p "  Wil je de data nu resetten en opnieuw beginnen? (j/n): " confirm
+    if [[ "$confirm" == "j" ]]; then
+      cd "$SUPABASE_DIR" && docker compose down -v 2>/dev/null || true
+      rm -rf "$SUPABASE_DIR/volumes/db/data"
+      rm -rf "$SUPABASE_DIR/.migrations_done"
+      log_info "Database-data gereset. Init-scripts draaien opnieuw bij volgende start."
+    else
+      log_info "Bestaande data behouden — init-scripts worden overgeslagen."
+    fi
+  fi
+}
+
 # --- Start services ---
 start_supabase() {
+  # Check of er een dirty DB state is van een eerdere installatie
+  check_dirty_db
+
   log_info "Supabase services starten..."
   cd "$SUPABASE_DIR"
   docker compose up -d || true
+
   log_info "Wachten tot database klaar is..."
-  local max_wait=30
+  local max_wait=60
   local waited=0
   while [ $waited -lt $max_wait ]; do
     if docker exec supabase-db pg_isready -U postgres >/dev/null 2>&1; then
       log_info "Database is klaar (na ${waited}s)"
       break
     fi
-    sleep 1
-    waited=$((waited + 1))
+    sleep 2
+    waited=$((waited + 2))
   done
   if [ $waited -ge $max_wait ]; then
-    log_warn "Database niet klaar na ${max_wait}s — ga toch door"
+    log_error "Database niet klaar na ${max_wait}s."
+    echo "  Controleer: docker logs supabase-db"
+    return 1
   fi
 }
 
