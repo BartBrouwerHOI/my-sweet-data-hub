@@ -21,6 +21,40 @@ function HandleidingPage() {
   const [mode, setMode] = useState<SetupMode>("single");
   const [distro, setDistro] = useState<Distro>("debian");
 
+  // User config fields with localStorage persistence
+  const [userConfig, setUserConfig] = useState({
+    githubUser: "",
+    repoName: "",
+    serverIp: "",
+    domain: "",
+    serverAIp: "",
+  });
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("handleiding-config");
+      if (saved) setUserConfig(JSON.parse(saved));
+    } catch {}
+  }, []);
+
+  const updateField = useCallback((field: keyof typeof userConfig, value: string) => {
+    setUserConfig(prev => {
+      const next = { ...prev, [field]: value };
+      localStorage.setItem("handleiding-config", JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  const fill = useCallback((text: string): string => {
+    let result = text;
+    if (userConfig.githubUser) result = result.replace(/JOUW-USER/g, userConfig.githubUser);
+    if (userConfig.repoName) result = result.replace(/JOUW-REPO/g, userConfig.repoName);
+    if (userConfig.serverIp) result = result.replace(/JOUW-SERVER-IP/g, userConfig.serverIp);
+    if (userConfig.domain) result = result.replace(/jouw-domein\.nl/g, userConfig.domain);
+    if (userConfig.serverAIp) result = result.replace(/SERVER_A_IP/g, userConfig.serverAIp);
+    return result;
+  }, [userConfig]);
+
   const singleSteps = [
     { id: "vereisten", title: "Vereisten" },
     { id: "architectuur", title: "Architectuur" },
