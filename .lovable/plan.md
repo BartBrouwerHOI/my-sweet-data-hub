@@ -1,52 +1,47 @@
 
 
-## Plan: Fouten in het installatieproces fixen
+## Plan: Privé repo fix + betere fallback voor install.sh
 
-### Gevonden problemen
+### Probleem 1: curl fallback werkt niet voor privé repo's
 
-**1. `ls install.sh` staat op de verkeerde plek (Split mode A en B)**
+De handleiding suggereert `curl -O https://raw.githubusercontent.com/...` als fallback, maar dit werkt **alleen voor publieke repo's**. Jouw repo (BartBrouwerHOI/Access-Guardian) is privé — curl haalt dan een 404-pagina op (14 bytes).
 
-In de single mode staat de volgorde correct (`cd` → `ls`), maar bij Split Server A (regel 424-428) en Split Server B (regel 469-473) wordt `ls install.sh` uitgevoerd VÓÓR `cd /opt/lovable-app`. Daardoor controleert het in de verkeerde directory.
+### Probleem 2: install.sh ontbreekt in de GitHub repo
 
-Huidige volgorde (fout):
-```
-git clone ... /opt/lovable-app
-ls install.sh              ← VERKEERD: nog niet in /opt/lovable-app!
-cd /opt/lovable-app
-sudo bash install.sh
-```
+De Lovable sync staat op "Connected" maar het bestand is niet in de repo gepusht. Dit kan komen doordat de sync bepaalde bestanden overslaat, of doordat er een sync-probleem is.
 
-Correcte volgorde:
-```
-git clone ... /opt/lovable-app
-cd /opt/lovable-app
-ls install.sh              ← NU in de juiste map
-sudo bash install.sh
-```
+### Oplossing
 
-**2. curl fallback URL hardcodeert `/main/` branch**
+**In `src/routes/handleiding.tsx`:**
 
-De fallback `curl -O https://raw.githubusercontent.com/.../main/install.sh` gaat ervan uit dat de default branch `main` heet. Lovable's GitHub sync kan ook `master` of een andere branch gebruiken. In de screenshot van de gebruiker haalde curl 14 bytes op (een 404-pagina), wat betekent dat het bestand niet op die URL staat.
+1. **Curl fallback vervangen** door instructies die werken voor privé repo's:
+   - Optie A: Gebruik `curl` met een GitHub Personal Access Token (PAT) voor privé repo's
+   - Optie B: Kopieer het script handmatig — toon een "Kopieer install.sh" knop op de handleiding-pagina zelf die de volledige inhoud van `install.sh` toont/kopieert
+   - Optie C: Gebruik `gh` CLI (GitHub CLI) die al geauthenticeerd kan zijn
 
-Oplossing: Tip toevoegen dat de branch kan afwijken, en de gebruiker aanraden om eerst op GitHub te controleren welke branch het is.
+2. **"Sync troubleshooting" blok uitbreiden** met concrete stappen:
+   - Controleer of de Lovable sync daadwerkelijk bestanden pusht (kijk naar recente commits op GitHub)
+   - Als install.sh ontbreekt: disconnect en reconnect de GitHub connector
+   - Als dat niet werkt: gebruik de handmatige kopie-optie
 
-**3. `install.sh` bestaat mogelijk niet in de GitHub repo**
-
-Het bestand `install.sh` staat wél in het Lovable-project, maar als de GitHub sync niet up-to-date is, mist het in de repo. De handleiding vermeldt dit al als troubleshooting, maar de curl-fallback werkt dan ook niet (zelfde repo). 
-
-Oplossing: Voeg een extra fallback optie toe — kopieer het script handmatig vanuit de handleiding-pagina zelf, of verwijs naar het "rauw" bekijken op GitHub om de branch te controleren.
+3. **Volledige inhoud van install.sh beschikbaar maken** op de handleiding-pagina via een expandable/collapsible sectie, zodat gebruikers het altijd handmatig kunnen kopiëren — onafhankelijk van GitHub sync of repo-toegang.
 
 ### Wijzigingen
 
 | Bestand | Actie |
 |---------|-------|
-| `src/routes/handleiding.tsx` | Fix `cd`/`ls` volgorde in Split A en B; verbeter curl fallback met branch-tip |
+| `src/routes/handleiding.tsx` | Curl fallback updaten voor privé repos (3 plekken); expandable "install.sh handmatig kopiëren" sectie toevoegen |
 
 ### Details
 
-**Split Server A (regel ~417-431):** Verplaats `cd /opt/lovable-app` naar vóór `ls install.sh`
+**Curl met token (voor privé repos):**
+```bash
+curl -H "Authorization: token JOUW_GITHUB_TOKEN" -O https://raw.githubusercontent.com/JOUW-USER/JOUW-REPO/main/install.sh
+```
 
-**Split Server B (regel ~462-478):** Zelfde fix
-
-**Curl fallback (3 plekken):** Voeg opmerking toe: "Controleer op GitHub welke branch je gebruikt (main of master)" en pas de URL aan zodat de branchnaam ook vervangbaar is.
+**Fallback volgorde (nieuw):**
+1. Controleer of install.sh in de repo staat (GitHub website)
+2. Zo niet: disconnect/reconnect Lovable GitHub sync
+3. Zo niet: kopieer install.sh handmatig vanaf de handleiding-pagina (collapsible code block met de volledige inhoud van install.sh)
+4. Of gebruik curl met een Personal Access Token voor privé repos
 
