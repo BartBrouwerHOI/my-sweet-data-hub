@@ -481,6 +481,10 @@ sudo bash install.sh
 # Kies: 3) Alleen frontend
 # Voer het IP-adres van Server A in wanneer gevraagd
 # Voer de Anon Key in die je bij Server A hebt genoteerd`}</CodeBlock>
+          <Warn>
+            <strong>install.sh niet gevonden?</strong> Controleer op GitHub of het bestand in de root van je repo staat én welke branch je gebruikt (<CopyCode fill={fill}>main</CopyCode> of <CopyCode fill={fill}>master</CopyCode>). Pas de URL hieronder aan:
+            <br /><CopyCode fill={fill}>{`curl -O https://raw.githubusercontent.com/JOUW-USER/JOUW-REPO/JOUW-BRANCH/install.sh`}</CopyCode>
+          </Warn>
           <p>Het script bouwt de React app als <InfoTooltip text="Software die in een afgesloten 'doos' draait, zodat het overal hetzelfde werkt." />, configureert <InfoTooltip text="Webserver die bezoekers doorstuurt naar de juiste service (reverse proxy)." /> als reverse proxy en regelt SSL.</p>
         </Step>
       )}
