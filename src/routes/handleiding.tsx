@@ -688,6 +688,11 @@ cd /opt/supabase && sudo docker compose restart auth`}</CodeBlock>
           <TroubleItem q="'getcwd: cannot access parent directories'" a="Je staat in een map die net verwijderd is. Typ eerst: cd ~ om naar een bestaande map te gaan, en probeer dan opnieuw." />
           <TroubleItem q="'bash: install.sh: No such file or directory'" a="Je staat niet in de juiste map, of de map is verwijderd. Gebruik altijd het volledige pad: sudo bash /opt/lovable-infra/install.sh" />
           <TroubleItem q="SSH werkt als gebruiker maar niet met sudo" a="sudo draait als root en gebruikt /root/.ssh/. Kopieer je key: sudo cp ~/.ssh/deploy_key /root/.ssh/deploy_key && sudo cp ~/.ssh/config /root/.ssh/config. Test daarna: sudo ssh -T git@github.com" />
+          <TroubleItem q="Auth/Storage/Realtime containers crashen (schema 'auth' does not exist / role 'anon' does not exist)" a="De database mist de Supabase rollen en schema's. Dit gebeurt als de data directory al bestond bij eerste start. Oplossing: stop alles, verwijder de data directory en start opnieuw:" />
+          <CodeBlock fill={fill} title="Database resetten">{`cd /opt/supabase && sudo docker compose down
+sudo rm -rf /opt/supabase/volumes/db/data
+sudo docker compose up -d`}</CodeBlock>
+          <p className="mt-2 text-sm text-muted-foreground">⚠️ Dit wist alle database-data. Maak eerst een backup als je data wilt behouden.</p>
         </div>
       </Step>
 

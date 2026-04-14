@@ -368,13 +368,17 @@ ENVEOF
 
   cp "$INFRA_DIR/docker-compose.yml" "$SUPABASE_DIR/docker-compose.yml"
 
-  mkdir -p "$SUPABASE_DIR/volumes/db/data"
   mkdir -p "$SUPABASE_DIR/volumes/storage"
   mkdir -p "$SUPABASE_DIR/volumes/db/init"
   mkdir -p "$SUPABASE_DIR/volumes/kong"
 
   if [[ -f "$INFRA_DIR/volumes/kong/kong.yml" ]]; then
     cp "$INFRA_DIR/volumes/kong/kong.yml" "$SUPABASE_DIR/volumes/kong/kong.yml"
+  fi
+
+  # Kopieer database init script (rollen, schema's, extensions)
+  if [[ -f "$INFRA_DIR/volumes/db/init/00-supabase-init.sql" ]]; then
+    cp "$INFRA_DIR/volumes/db/init/00-supabase-init.sql" "$SUPABASE_DIR/volumes/db/init/00-supabase-init.sql"
   fi
 
   # Migraties komen uit de APP-repo (als die gecloned is)
