@@ -20,7 +20,6 @@ function Index() {
       {/* Hero */}
       <section className="flex flex-col items-center justify-center gap-6 px-6 py-24 text-center">
         <div className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/50 px-4 py-1.5 text-xs font-medium text-muted-foreground">
-
           <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
           Open source · Self-hosted
         </div>
@@ -71,13 +70,19 @@ function Index() {
           <h2 className="mb-8 text-center text-2xl font-semibold text-foreground">Architectuur</h2>
           <div className="overflow-x-auto rounded-lg border border-border bg-muted/50 p-6">
             <pre className="text-sm leading-relaxed text-muted-foreground">
-{`Browser → Nginx (SSL/443)
-            ├── /          → Frontend container (React)
-            └── /auth      → Supabase Auth (GoTrue)
-                /rest      → PostgREST (API)
-                /storage   → Supabase Storage
-                /realtime  → Supabase Realtime
-                             └── PostgreSQL 15`}
+{`/opt/lovable-infra/   ← Publieke infra-repo (HTTPS, geen key nodig)
+│  install.sh, Dockerfiles, docker-compose.yml, kong.yml
+│
+/opt/lovable-app/     ← Jouw app-repo (privé, deploy key)
+│  package.json, src/, supabase/migrations/
+│
+Browser → Nginx (SSL/443)
+          ├── /          → Frontend container (SPA of SSR)
+          └── /auth      → Supabase Auth (GoTrue)
+              /rest      → PostgREST (API)
+              /storage   → Supabase Storage
+              /realtime  → Supabase Realtime
+                           └── PostgreSQL 15`}
             </pre>
           </div>
         </div>
@@ -93,8 +98,8 @@ function Index() {
           />
           <FeatureCard
             icon={<Globe className="h-6 w-6" />}
-            title="Proxmox-ready"
-            description="Ontworpen voor Ubuntu 24 VM's in je eigen Proxmox cluster."
+            title="SPA + SSR"
+            description="Automatische detectie: Vite SPA of TanStack Start SSR. Kiest het juiste Dockerfile."
           />
         </div>
       </section>
