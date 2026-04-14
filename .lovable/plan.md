@@ -1,56 +1,61 @@
 
 
-## Plan: Handleiding 100% correct maken + beginner-friendly
+## Plan: Info-tooltips toevoegen aan technische termen
 
-### Gevonden bugs (kritiek)
+### Wat wordt gebouwd
 
-**1. Verkeerde port mapping in install.sh**
-`docker run ... -p 3000:80` maar de Dockerfile draait Node.js op poort 3000, niet 80. Moet `-p 3000:3000` zijn. Dit staat op twee plekken: `start_frontend()` (regel 262) en in `update.sh` (regel 447). De handleiding noemt ook `-p 3000:80` bij handmatige updates.
+Een `InfoTooltip` component dat bij technische termen een ℹ️-icoon toont. Bij hover verschijnt een korte uitleg. Dit maakt de handleiding begrijpelijk voor leken zonder de tekst te vervuilen met lange uitleg.
 
-**2. Data migratie COPY-commando klopt niet**
-De handleiding zegt `\COPY ... FROM '/tmp/tabel.csv'` via `docker exec`, maar `/tmp/tabel.csv` is een pad op de HOST, niet in de container. Moet eerst `docker cp` doen naar de container, of stdin gebruiken:
+### Technisch
+
+- Nieuw component `InfoTooltip` in `handleiding.tsx` — simpele CSS hover tooltip (geen extra dependency nodig)
+- Inline `<InfoTooltip term="..." />` naast technische begrippen
+
+### Waar komen tooltips
+
+| Term | Uitleg in tooltip |
+|------|-------------------|
+| SSH | Veilige verbinding met je server op afstand, zoals remote desktop maar dan via tekst |
+| Deploy key | Een SSH-sleutel die alleen leesrechten heeft op één specifieke GitHub repo |
+| Docker / Docker container | Software die in een afgesloten "doos" draait, zodat het overal hetzelfde werkt |
+| Docker Compose | Tool om meerdere Docker containers tegelijk te starten met één configuratiebestand |
+| Nginx | Webserver die bezoekers doorstuurt naar de juiste service (reverse proxy) |
+| Kong | API Gateway — controleert of API-verzoeken een geldige sleutel hebben |
+| SSL / Let's Encrypt | Versleutelde verbinding (https), gratis via Let's Encrypt |
+| PostgreSQL | De database waar al je data in wordt opgeslagen |
+| GoTrue | Supabase service die login, registratie en wachtwoord-reset regelt |
+| PostgREST | Zet je database automatisch om naar een REST API |
+| Anon Key | Publieke sleutel waarmee de frontend met de Supabase API praat |
+| Service Role Key | Geheime sleutel met volledige database-toegang — nooit in de frontend gebruiken |
+| JWT | Token (digitaal pasje) waarmee een gebruiker bewijst dat hij ingelogd is |
+| Firewall / UFW | Bepaalt welke poorten open of dicht staan op je server |
+| SMTP | Protocol voor het versturen van e-mails (verificatie, wachtwoord-reset) |
+| OAuth | Inloggen via een derde partij zoals Google |
+| Cron | Geplande taken die automatisch draaien op vaste tijden |
+| pg_dump | PostgreSQL commando om een volledige backup van je database te maken |
+| SCP | Bestanden kopiëren tussen je computer en een server via SSH |
+| Reverse proxy | Nginx stuurt verkeer door naar de juiste service op basis van de URL |
+
+### Component design
+
+```tsx
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <span className="relative inline-flex group cursor-help">
+      <Info className="h-3.5 w-3.5 text-muted-foreground/60 hover:text-primary" />
+      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 
+        hidden group-hover:block w-56 rounded-md border bg-popover p-2 
+        text-xs text-popover-foreground shadow-md z-50">
+        {text}
+      </span>
+    </span>
+  );
+}
 ```
-cat /tmp/tabel.csv | docker exec -i supabase-db psql -U supabase -d postgres -c "\COPY public.tabel FROM STDIN WITH CSV HEADER"
-```
 
-**3. Dubbele clone-stap**
-De handleiding zegt "clone je repo" EN daarna `install.sh` dat opnieuw probeert te clonen via `clone_app()`. Verwarrend — de handleiding moet kloppen met wat het script doet.
+### Bestanden
 
-**4. Backup directory bestaat niet**
-Cron-job schrijft naar `/opt/backups/` maar die map wordt nergens aangemaakt.
-
-### Verbeteringen voor leken
-
-**5. "Waar doe je dit?" labels toevoegen**
-Elke stap krijgt een duidelijke indicator:
-- `📍 Terminal op je VM` — voor commandos
-- `📍 GitHub.com` — voor deploy key toevoegen
-- `📍 Je eigen computer` — voor browser/SSH verbinding
-
-**6. Meer uitleg toevoegen**
-- Wat is een terminal en hoe open je die (SSH uitleg)
-- Wat betekent `JOUW-USER/JOUW-REPO` — expliciet uitleggen dat je je eigen GitHub naam invult
-- Wat is een deploy key en waarom heb je die nodig
-- Bij split setup: duidelijk aangeven welke Anon Key je moet bewaren en waar die terugkomt
-
-**7. Stap volgorde verduidelijken**
-- Clone-stap verwijderen uit handleiding (het script doet dit zelf)
-- OF `clone_app()` uit install.sh verwijderen en handleiding de clone laten doen
-- Ik kies: handleiding laat de user clonen, script detecteert bestaande dir en doet `git pull`
-
-### Alle bestanden
-
-| Bestand | Wijziging |
-|---------|-----------|
-| `install.sh` | Fix `-p 3000:80` → `-p 3000:3000` op 2 plekken. Backup dir aanmaken. |
-| `src/routes/handleiding.tsx` | Locatie-labels per stap. COPY-commando fixen. Uitleg voor leken toevoegen. Handmatige update-commando port fixen. Backup mkdir toevoegen. |
-
-### Wat al correct is (geverifieerd)
-- Kong config + environment variable substitution: correct
-- PostgREST `authenticator` role: standaard aanwezig in supabase/postgres image
-- JWT generatie in bash: werkend (HS256 met openssl)
-- Nginx routing via Kong poort 8000: correct
-- Deploy keys: twee verschillende keys op twee servers, beide als deploy key op dezelfde repo — GitHub staat dit toe
-- Docker Compose service dependencies + healthchecks: correct
-- TanStack Start SSR Dockerfile met `.output/server/index.mjs`: correct
+| Bestand | Actie |
+|---------|-------|
+| `src/routes/handleiding.tsx` | `InfoTooltip` component toevoegen + ~20 tooltips plaatsen bij technische termen door de hele handleiding |
 
