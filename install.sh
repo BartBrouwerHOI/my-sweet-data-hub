@@ -388,19 +388,17 @@ ENVEOF
   cp "$INFRA_DIR/docker-compose.yml" "$SUPABASE_DIR/docker-compose.yml"
 
   mkdir -p "$SUPABASE_DIR/volumes/storage"
-  mkdir -p "$SUPABASE_DIR/volumes/db/init"
+  mkdir -p "$SUPABASE_DIR/volumes/db"
   mkdir -p "$SUPABASE_DIR/volumes/kong"
 
   if [[ -f "$INFRA_DIR/volumes/kong/kong.yml" ]]; then
     cp "$INFRA_DIR/volumes/kong/kong.yml" "$SUPABASE_DIR/volumes/kong/kong.yml"
   fi
 
-  # Kopieer database init script en vervang CHANGEME door het werkelijke wachtwoord
-  if [[ -f "$INFRA_DIR/volumes/db/init/00-supabase-init.sql" ]]; then
-    cp "$INFRA_DIR/volumes/db/init/00-supabase-init.sql" "$SUPABASE_DIR/volumes/db/init/00-supabase-init.sql"
-    sed -i "s/CHANGEME/$POSTGRES_PASSWORD/g" "$SUPABASE_DIR/volumes/db/init/00-supabase-init.sql"
-    log_info "Database init script gekopieerd en wachtwoorden ingevuld."
-  fi
+  # Kopieer roles.sql en jwt.sql (wachtwoorden voor service-rollen + JWT config)
+  cp "$INFRA_DIR/volumes/db/roles.sql" "$SUPABASE_DIR/volumes/db/roles.sql"
+  cp "$INFRA_DIR/volumes/db/jwt.sql" "$SUPABASE_DIR/volumes/db/jwt.sql"
+  log_info "roles.sql en jwt.sql gekopieerd naar Supabase dir."
 
   # Migraties worden NA het opstarten via docker exec uitgevoerd (zie run_migrations)
   if [[ -d "$APP_DIR/supabase/migrations" ]]; then
@@ -417,7 +415,7 @@ wait_for_bootstrap() {
   while [ $waited -lt $max_wait ]; do
     local check_result
     check_result=$(docker exec supabase-db bash -c \
-      "PGPASSWORD=\$POSTGRES_PASSWORD psql -U supabase -d postgres -h localhost -tAX -c \"
+      "PGPASSWORD=\$POSTGRES_PASSWORD psql -U postgres -d postgres -h localhost -tAX -c \"
         SELECT CASE
           WHEN (SELECT COUNT(*) FROM pg_namespace WHERE nspname IN ('auth','storage')) = 2
            AND (SELECT COUNT(*) FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role','supabase_admin')) = 4
@@ -472,7 +470,7 @@ run_migrations() {
     if [[ ! -f "$SUPABASE_DIR/.migrations_done/$name" ]]; then
       log_info "  Migratie: $name"
       if docker exec -i supabase-db bash -c \
-        'PGPASSWORD=$POSTGRES_PASSWORD psql -U supabase -d postgres -h localhost -v ON_ERROR_STOP=1 -X --single-transaction' \
+        'PGPASSWORD=$POSTGRES_PASSWORD psql -U postgres -d postgres -h localhost -v ON_ERROR_STOP=1 -X --single-transaction' \
         < "$migration"; then
         touch "$SUPABASE_DIR/.migrations_done/$name"
         echo "    ✅ Succesvol"
