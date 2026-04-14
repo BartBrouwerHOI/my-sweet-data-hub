@@ -1,58 +1,49 @@
 
 
-## Analyse: huidige staat
+## Analyse
 
-De werkwijze is nu goed en logisch. Scripts en handleiding zijn gesynchroniseerd. Er zijn nog **4 kleine problemen**:
+De handleiding gaat ervan uit dat de gebruiker als `root` is ingelogd (`ssh root@JOUW-SERVER-IP`), maar in de praktijk loggen veel beheerders in als een gewone gebruiker. Daardoor falen commando's die schrijven naar `/opt/` of Docker aanroepen.
 
-### Gevonden problemen
+**Commando's die `sudo` missen in `handleiding.tsx`:**
 
-**1. install.sh: database mode Nginx config is overbodig**
-In database mode (regel 514-526) wordt een Nginx config aangemaakt die alleen `{"status":"ok"}` teruggeeft. Maar de beheerder heeft ook al Nginx als dependency geïnstalleerd (regel 166). In database mode is Nginx niet nodig — Kong (poort 8000) handelt alles af. Dit is verwarrend: waarom draait er een webserver die niets doet?
+| Regel | Commando | Probleem |
+|-------|----------|----------|
+| 409 | `git clone ... /opt/lovable-infra` | Schrijft naar `/opt/` |
+| 440-441 | `git clone ... /opt/lovable-infra` (Server A) | Idem |
+| 479-480 | `git clone ... /opt/lovable-infra` (Server B) | Idem |
+| 501-502 | `docker ps` | Docker vereist sudo of groepslidmaatschap |
+| 505 | `curl -I http://localhost:3000` | OK, geen sudo nodig |
+| 508 | `cat /opt/supabase/credentials.txt` | Bestand is `chmod 600` owned by root |
+| 511-512 | `curl ... -H "apikey: ..."` | OK |
+| 523-524 | `docker ps` (split) | Docker |
+| 527 | `cat /opt/supabase/credentials.txt` (split) | chmod 600 |
+| 530-531 | `curl ...` | OK |
+| 536-538 | `docker ps`, `curl` (Server B) | Docker |
+| 554-555 | `lovable-update` | Draait docker + git pull in /opt/ |
+| 567-568 | `lovable-update` (split frontend) | Idem |
+| 572-573 | `lovable-update` (split backend) | Idem |
+| 636 | `cd /opt/supabase && docker compose restart auth` | Docker + /opt/ |
+| 670 | `cd /opt/supabase && docker compose restart auth` | Idem |
+| 704-714 | Backup: `docker exec ...`, `pg_dump`, restore | Docker |
+| 730-731 | `tar -czf ... /opt/supabase/...` | Leest /opt/ |
 
-Twee opties:
-- A) Skip Nginx installatie + config helemaal in database mode
-- B) Laat het, want het doet geen kwaad en SSL voor Studio is handig
+## Plan
 
-**Aanbeveling:** Laat het staan — het is nuttig als health-check endpoint en voor eventuele SSL op Studio later. Geen actie nodig.
+### Bestand: `src/routes/handleiding.tsx`
 
-**2. install.sh: `sleep 15` na `start_supabase()` (regel 440)**
-Hardcoded sleep is fragiel. Beter: een poll-loop die wacht tot de database daadwerkelijk klaar is. Maar dit is een minor improvement, niet een bug.
+Alle bovenstaande commando's krijgen `sudo` prefix waar nodig:
 
-**3. Handleiding: Server B codeblok bevat commentaar dat niet kopieerbaar is**
-Regel 484-488 in handleiding.tsx — het codeblok voor Server B bevat:
-```
-# Kies: 3) Alleen frontend
-# Voer de SSH URL van je APP-repo in: ...
-# Voer het IP-adres van Server A in wanneer gevraagd
-# Voer de Anon Key in die je bij Server A hebt genoteerd
-```
-Dit zijn instructies vermomd als commentaar in een kopieerbaar blok. Als de beheerder dit blok kopieert en plakt, worden de comments mee-geplakt. Beter: verplaats deze instructies naar gewone tekst ONDER het codeblok, en houd het codeblok clean (alleen de daadwerkelijke commando's).
+- `git clone ... /opt/lovable-infra` → `sudo git clone ... /opt/lovable-infra`
+- `docker ps` → `sudo docker ps`
+- `cat /opt/supabase/credentials.txt` → `sudo cat /opt/supabase/credentials.txt`
+- `lovable-update` → `sudo lovable-update`
+- `cd /opt/supabase && docker compose restart auth` → `cd /opt/supabase && sudo docker compose restart auth`
+- Backup `docker exec` commando's → `sudo docker exec`
+- `tar -czf` → `sudo tar -czf`
 
-**4. Handleiding: `<ANON_KEY>` placeholder in na-installatie is inconsistent**
-Bij "API testen" staat `curl ... -H "apikey: <ANON_KEY>"`. De `<ANON_KEY>` wordt NIET vervangen door de `fill()` functie (die vervangt alleen `JOUW-SERVER-IP`, `APP-USER` etc.). Dit is bewust (de beheerder moet de key uit credentials.txt halen), maar de handleiding legt dit niet uit bij de eerste keer dat het voorkomt. Een korte uitleg zou helpen.
+Totaal: ~15 commando's aanpassen in de handleiding.
 
----
+### Bestand: `update.sh`
 
-## Plan: fixes
-
-### A. Handleiding: Server B codeblok opschonen
-- Verplaats de 4 commentaarregels uit het codeblok naar een `<ul>` eronder
-- Codeblok bevat alleen de 3 daadwerkelijke commando's
-
-### B. Handleiding: verduidelijk `<ANON_KEY>` bij eerste gebruik
-- De tekst "Kopieer de Anon Key uit de output hierboven en plak die in het volgende commando" staat er al. Dit is voldoende — geen wijziging nodig.
-
-### C. install.sh: `sleep 15` vervangen door poll-loop
-- Vervang de hardcoded sleep door een loop die `pg_isready` checkt (max 30 seconden)
-
-**Conclusie:** Alleen 2 kleine wijzigingen nodig.
-
----
-
-## Bestanden
-
-| Bestand | Wijziging |
-|---|---|
-| `src/routes/handleiding.tsx` | Server B codeblok: verplaats instructie-comments naar tekst |
-| `install.sh` | Vervang `sleep 15` door `pg_isready` poll-loop |
+Geen wijzigingen nodig — `update.sh` gebruikt al `docker` en `git` commando's die als root draaien (het wordt aangeroepen via `sudo lovable-update`).
 
