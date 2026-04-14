@@ -1,69 +1,86 @@
 
 
-## Analyse: huidige pijnpunten
+## Analyse: gevonden problemen
 
-Na het doorlopen van alle bestanden zie ik drie grote problemen voor beheerders:
+### Kritieke fouten
 
-### 1. Twee deploy keys / twee repo's = verwarring
-De handleiding vraagt om infra-repo EN app-repo velden, legt uit dat GitHub dezelfde deploy key niet op twee repo's toelaat, en verwijst naar machine users en PATs. Dit is de grootste bron van complexiteit. **De infra-repo bevat geen geheimen** (docker-compose.yml gebruikt env vars, geen hardcoded secrets). Er is geen reden om deze privé te houden.
+**1. Fake infra-repo URL overal hardcoded**
+`https://github.com/lovable-vps/lovable-infra.git` bestaat niet. Dit staat in de handleiding, INSTALL.md, en codeblokken. De gebruiker moet de echte URL van dit project invullen, of het moet configureerbaar zijn.
 
-**Oplossing:** Maak de infra-repo **publiek**. Dan:
-- Clone via HTTPS zonder authenticatie: `git clone https://github.com/USER/REPO.git`
-- Beheerder heeft alleen een deploy key nodig voor de **app-repo**
-- Formulier in handleiding wordt simpeler (geen infra-user/infra-repo velden meer)
+**2. Split mode Server A: migraties onmogelijk**
+De handleiding (regel 543-550) zegt op Server A: `cd /opt/lovable-app && git pull` — maar in database mode wordt `clone_app` overgeslagen. Die map bestaat niet op Server A.
 
-### 2. Te veel configuratievelden in de handleiding
-Het formulier vraagt 7 velden (infraUser, infraRepo, appUser, appRepo, serverIp, domain, serverAIp). Met een publieke infra-repo en de infra-URL hardcoded in de handleiding worden infraUser/infraRepo overbodig.
+**3. Database mode: kapot update-script**
+`create_update_script()` gebruikt `$PROJECT_TYPE` en `$APP_DIR`, maar in database mode zijn die leeg. Het gegenereerde `lovable-update` commando zou falen.
 
-### 3. `update.sh` in de repo root is een dode stub
-Het bestand doet niets behalve doorverwijzen naar `lovable-update`. Verwarrend als iemand het per ongeluk draait.
+**4. `sudo chown $USER:$USER` is zinloos als root**
+De handleiding begint met `ssh root@...`. Als je als root inlogt is `$USER=root` en doet chown niets. Bovendien draait `install.sh` al als root, dus de mkdir+chown stap is overbodig — het script doet dit zelf.
 
-### 4. `nginx/frontend-ssr.conf` wordt nooit gebruikt
-De SSR Dockerfile draait Node.js direct — er is geen nginx nodig in de container. De host-nginx (geconfigureerd door install.sh) proxied al naar poort 3000. Dit bestand is misleidend.
+### Logica/volgorde problemen
 
-### 5. Troubleshooting item verwijst nog naar `/opt/lovable-app/install.sh`
-Regel 707-709 verwijst naar het oude pad, moet `/opt/lovable-infra/install.sh` zijn.
+**5. Handleiding clone-stappen te veel ruis**
+De drie regels `mkdir -p`, `chown`, `git clone` kunnen één regel zijn: `git clone ... /opt/lovable-infra`. Git maakt de map zelf aan. Als root heb je geen chown nodig.
+
+**6. Split mode mist een duidelijke "checklist" tussenstap**
+Na Server A installatie moet je gegevens noteren (Anon Key, Server A IP). De handleiding vermeldt dit, maar het zit verstopt in een waarschuwingsblok. Een expliciete "noteer deze gegevens" checklist is duidelijker.
+
+**7. Migraties zijn niet idempotent**
+Het update-script draait ALLE migraties opnieuw bij elke update. Supabase migraties bevatten vaak `CREATE TABLE` die falen bij tweede run. De `|| true` onderdrukt de fout, maar dat verbergt ook echte fouten.
+
+### Kleine verbeteringen
+
+**8. Handleiding verwijst naar `JOUW_ANON_KEY` in na-installatie stap** — maar die key staat in `/opt/supabase/credentials.txt`. Zou helpen om dat expliciet te zeggen.
+
+**9. De infra-repo URL moet in het configuratieformulier** — of je hardcode de echte URL van dit project.
 
 ---
 
-## Plan: vereenvoudiging
+## Plan: fixes
 
-### A. install.sh — infra-clone via HTTPS (geen deploy key nodig)
-- Hardcode de infra-repo URL als HTTPS (public) bovenaan het script
-- Verwijder de noodzaak voor een deploy key op de infra-repo
-- De `clone_app()` functie blijft SSH vragen (die repo is privé)
-- Voeg een `INFRA_REPO_URL` variabele toe bovenaan zodat het makkelijk aanpasbaar is
+### A. Infra-repo URL oplossen
+Twee opties:
+- **Optie 1**: Voeg `infraUrl` veld toe aan het configuratieformulier (simpelste)
+- **Optie 2**: Hardcode de echte GitHub URL van dit project
 
-### B. handleiding.tsx — formulier versimpelen
-- Verwijder `infraUser` en `infraRepo` velden
-- Hardcode de infra clone-URL in de codeblokken (HTTPS, publiek)
-- Houd alleen: `appUser`, `appRepo`, `serverIp`, `domain`, `serverAIp`
-- Deploy key sectie: verwijder "Optie B: PAT" en "machine user" — er is maar één privé repo, dus één deploy key werkt altijd
-- Verwijder de waarschuwing over "GitHub staat dezelfde deploy key niet toe op twee repo's"
+Ik ga voor **optie 1** — een extra veld "Infra-repo URL" met placeholder `https://github.com/USER/REPO.git`. De handleiding-codeblokken gebruiken dan `fill()` om de URL in te vullen.
 
-### C. Verwijder `nginx/frontend-ssr.conf`
-- Wordt nergens gebruikt (SSR draait op Node.js, host-nginx doet de proxy)
-- Verwijder het bestand
+### B. Database mode fix in install.sh
+- `create_update_script`: als `INSTALL_MODE=database`, genereer een update-script dat alleen `git pull` in infra doet + `docker compose restart` — geen frontend rebuild.
+- Of: sla `create_update_script` over in database mode.
 
-### D. Vervang `update.sh` door directe instructie
-- Verwijder de stub, of maak er een werkend fallback-script van dat zelfstandig werkt (zonder dat `lovable-update` al geregistreerd is)
+### C. Split mode migraties fix in handleiding
+- Server A: voeg instructie toe om de app-repo te clonen (alleen voor migraties), of geef een alternatief commando dat de SQL direct van Server B kopieert via scp.
 
-### E. Fix troubleshooting pad
-- Regel 707: verander `/opt/lovable-app/install.sh` naar `/opt/lovable-infra/install.sh`
+### D. Vereenvoudig clone-instructies
+Van:
+```bash
+sudo mkdir -p /opt/lovable-infra
+sudo chown $USER:$USER /opt/lovable-infra
+git clone https://... /opt/lovable-infra
+```
+Naar:
+```bash
+git clone https://... /opt/lovable-infra
+```
 
-### F. index.tsx — landingspagina updaten
-- Architectuurdiagram: voeg de twee-map structuur toe (infra + app)
-- Feature "SPA + SSR" benoemen
+### E. Na-installatie: verwijs naar credentials.txt
+Vervang `JOUW_ANON_KEY` placeholder door:
+```bash
+# Je Anon Key vind je in:
+cat /opt/supabase/credentials.txt | grep "Anon Key"
+```
+
+### F. Migraties idempotent maken
+Voeg `--single-transaction` toe en track welke migraties al gedraaid zijn via een simpele marker-file, of gebruik `IF NOT EXISTS` hint in de documentatie.
 
 ---
 
 ## Bestanden
 
-| Bestand | Actie |
+| Bestand | Wijziging |
 |---|---|
-| `install.sh` | Voeg `INFRA_REPO_URL` variabele toe, clone via HTTPS |
-| `src/routes/handleiding.tsx` | Formulier versimpelen, deploy key sectie verkorten, fix troubleshooting pad |
-| `nginx/frontend-ssr.conf` | Verwijderen (ongebruikt) |
-| `update.sh` | Werkend maken als standalone fallback |
-| `src/routes/index.tsx` | Architectuur-diagram updaten |
+| `src/routes/handleiding.tsx` | InfraUrl veld toevoegen, clone-stappen vereenvoudigen, na-installatie credentials.txt referentie, split Server A migratie-fix |
+| `install.sh` | Database mode: skip of pas create_update_script aan |
+| `update.sh` | Migraties: track al-gedraaide migraties |
+| `INSTALL.md` | Clone-stappen vereenvoudigen, placeholder URL aanpassen |
 
