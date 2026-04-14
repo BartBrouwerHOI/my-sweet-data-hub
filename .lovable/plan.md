@@ -1,25 +1,27 @@
 
 
-## Plan: Waarschuwingsblok leesbaarder maken
+## Plan: Fix SSH-check false negative in install.sh
 
 ### Probleem
 
-De gele waarschuwing onderaan de "install.sh handmatig kopiëren" sectie (regel 1208-1210) gebruikt `text-yellow-200` — dat is bijna wit op een lichtgele achtergrond, waardoor het onleesbaar is.
+`ssh -T git@github.com` retourneert **altijd exit code 1** — ook bij succesvolle authenticatie. Door `set -euo pipefail` bovenaan het script wordt de exit code van `ssh` (1) doorgepropageerd door de pipe, waardoor `grep -q` wel matcht maar de pipe toch exit code 1 retourneert. Resultaat: de SSH-check faalt altijd, zelfs als de verbinding werkt.
 
 ### Oplossing
 
-**In `src/routes/handleiding.tsx` (regel 1208):**
+Vang de output op in een variabele in plaats van een pipe te gebruiken:
 
-Verander de styling van het gele waarschuwingsblok naar donkerdere, leesbare kleuren:
+```bash
+local ssh_output
+ssh_output=$(ssh -T -o ConnectTimeout=10 git@github.com 2>&1 || true)
+if ! echo "$ssh_output" | grep -q "successfully authenticated"; then
+```
 
-- `text-yellow-200` → `text-foreground` (past bij het thema)
-- `bg-yellow-500/10` → `bg-yellow-500/10` (behouden)
-- `border-yellow-500/30` → `border-yellow-500/30` (behouden)
-- De `<strong>` en `<code>` elementen erven dan automatisch leesbare kleuren
+De `|| true` voorkomt dat `set -e` het script afbreekt bij exit code 1 van ssh.
 
 ### Wijzigingen
 
 | Bestand | Actie |
 |---------|-------|
-| `src/routes/handleiding.tsx` | Regel 1208: `text-yellow-200` vervangen door `text-foreground` zodat de tekst leesbaar is op zowel licht als donker thema |
+| `install.sh` | Regel 203: SSH-check herschrijven met variabele + `\|\| true` |
+| `src/routes/handleiding.tsx` | Embedded `installScript` string updaten met dezelfde fix |
 
