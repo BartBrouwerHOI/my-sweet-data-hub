@@ -978,10 +978,17 @@ generate_secrets() {
 clone_app() {
   log_info "App clonen..."
 
+  # Checksum van het NU draaiende script opslaan vóór clone
+  local current_checksum=""
+  if [[ -f "\$0" ]]; then
+    current_checksum=\$(sha256sum "\$0" 2>/dev/null | cut -d' ' -f1 || true)
+  fi
+
   if [[ -d "\$APP_DIR" ]]; then
-    if [[ -d "\$APP_DIR/.git" && -f "\$APP_DIR/docker-compose.yml" ]]; then
+    if [[ -d "\$APP_DIR/.git" ]]; then
       log_info "Geldige repo gevonden, git pull..."
       cd "\$APP_DIR" && git pull
+      _self_update_check "\$current_checksum"
       return
     else
       log_warn "Map \$APP_DIR bestaat maar is geen geldige repo."
@@ -1047,14 +1054,20 @@ clone_app() {
   fi
   git clone "\$GITHUB_REPO" "\$APP_DIR"
 
-  # Self-update: als de repo een nieuwere install.sh bevat, herstart daarmee
-  if [[ -f "\$APP_DIR/install.sh" ]]; then
-    if ! cmp -s "\$0" "\$APP_DIR/install.sh"; then
-      log_info "Nieuwere install.sh gevonden in repo, herstart..."
-      cp "\$APP_DIR/install.sh" /usr/local/bin/lovable-install
-      chmod +x /usr/local/bin/lovable-install
-      exec bash "\$APP_DIR/install.sh" "\$@"
-    fi
+  _self_update_check "\$current_checksum"
+}
+
+_self_update_check() {
+  local old_checksum="\$1"
+  [[ -z "\$old_checksum" ]] && return
+  [[ ! -f "\$APP_DIR/install.sh" ]] && return
+  local new_checksum
+  new_checksum=\$(sha256sum "\$APP_DIR/install.sh" 2>/dev/null | cut -d' ' -f1 || true)
+  if [[ "\$old_checksum" != "\$new_checksum" ]]; then
+    log_info "Nieuwere install.sh gevonden, herstart..."
+    cp "\$APP_DIR/install.sh" /usr/local/bin/lovable-install
+    chmod +x /usr/local/bin/lovable-install
+    exec bash "\$APP_DIR/install.sh" "\$@"
   fi
 }
 
@@ -1083,7 +1096,9 @@ SITE_URL=\$api_url
 ENVEOF
   if [[ ! -f "\$APP_DIR/docker-compose.yml" ]]; then
     log_error "docker-compose.yml niet gevonden in \$APP_DIR"
-    log_error "Controleer of je repo dit bestand bevat."
+    echo "  Controleer of docker-compose.yml in de root van je repo staat."
+    echo "  Bestanden in \$APP_DIR:"
+    ls -la "\$APP_DIR/" 2>/dev/null || echo "  (map niet gevonden)"
     exit 1
   fi
   cp "\$APP_DIR/docker-compose.yml" "\$SUPABASE_DIR/docker-compose.yml"
