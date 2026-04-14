@@ -20,6 +20,7 @@ function Index() {
       {/* Hero */}
       <section className="flex flex-col items-center justify-center gap-6 px-6 py-24 text-center">
         <div className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/50 px-4 py-1.5 text-xs font-medium text-muted-foreground">
+
           <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
           Open source · Self-hosted
         </div>
