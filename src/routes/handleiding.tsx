@@ -1046,6 +1046,16 @@ clone_app() {
     [[ "\$confirm" != "j" ]] && exit 1
   fi
   git clone "\$GITHUB_REPO" "\$APP_DIR"
+
+  # Self-update: als de repo een nieuwere install.sh bevat, herstart daarmee
+  if [[ -f "\$APP_DIR/install.sh" ]]; then
+    if ! cmp -s "\$0" "\$APP_DIR/install.sh"; then
+      log_info "Nieuwere install.sh gevonden in repo, herstart..."
+      cp "\$APP_DIR/install.sh" /usr/local/bin/lovable-install
+      chmod +x /usr/local/bin/lovable-install
+      exec bash "\$APP_DIR/install.sh" "\$@"
+    fi
+  fi
 }
 
 setup_supabase() {
@@ -1071,6 +1081,11 @@ SMTP_PASS=
 SMTP_SENDER_NAME=Lovable App
 SITE_URL=\$api_url
 ENVEOF
+  if [[ ! -f "\$APP_DIR/docker-compose.yml" ]]; then
+    log_error "docker-compose.yml niet gevonden in \$APP_DIR"
+    log_error "Controleer of je repo dit bestand bevat."
+    exit 1
+  fi
   cp "\$APP_DIR/docker-compose.yml" "\$SUPABASE_DIR/docker-compose.yml"
   mkdir -p "\$SUPABASE_DIR/volumes/db/data" "\$SUPABASE_DIR/volumes/storage" "\$SUPABASE_DIR/volumes/db/init" "\$SUPABASE_DIR/volumes/kong"
   [[ -f "\$APP_DIR/volumes/kong/kong.yml" ]] && cp "\$APP_DIR/volumes/kong/kong.yml" "\$SUPABASE_DIR/volumes/kong/kong.yml"
