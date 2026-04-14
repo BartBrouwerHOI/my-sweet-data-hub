@@ -520,12 +520,12 @@ curl http://localhost/rest/v1/ -H "apikey: JOUW_ANON_KEY"`}</CodeBlock>
             <CodeBlock fill={fill}>{`# Eén commando om alles te updaten:
 lovable-update
 
-# Of handmatig:
-cd /opt/lovable-app
-git pull
-docker build -t lovable-frontend -f Dockerfile .
-docker stop lovable-frontend && docker rm lovable-frontend
-docker run -d --name lovable-frontend --restart unless-stopped -p 3000:3000 lovable-frontend`}</CodeBlock>
+# Dit doet:
+# 1. git pull in /opt/lovable-infra (infra-updates)
+# 2. git pull in /opt/lovable-app (app-updates)
+# 3. Rebuild frontend met juiste Dockerfile (SPA of SSR)
+# 4. Restart container
+# 5. Database migraties draaien`}</CodeBlock>
           </>
         ) : (
           <>
