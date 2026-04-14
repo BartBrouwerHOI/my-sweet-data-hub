@@ -236,11 +236,14 @@ function HandleidingPage() {
           <>
             <p>Alles draait op één VM:</p>
             <CodeBlock fill={fill}>{`[VM - 4GB RAM]
+├── /opt/lovable-infra/  ← Infra-repo (installer, Dockerfiles, Supabase stack)
+├── /opt/lovable-app/    ← App-repo (jouw Lovable project)
+│
 ├── Nginx (SSL termination + reverse proxy)
-│   ├── /           → Node.js frontend (poort 3000)
+│   ├── /           → Frontend container (poort 3000)
 │   └── /auth, /rest, /storage, /realtime → Kong API Gateway (poort 8000)
 │
-├── React Frontend (Node.js, Docker container)
+├── Frontend (Docker container, SPA of SSR — automatisch gedetecteerd)
 │
 └── Supabase stack (Docker Compose)
     ├── Kong (API Gateway, poort 8000) ← valideert API keys
