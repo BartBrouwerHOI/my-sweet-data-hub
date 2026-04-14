@@ -102,6 +102,40 @@ function HandleidingPage() {
         </p>
       </div>
 
+      {/* Distro toggle */}
+      <div className="mb-10 rounded-lg border border-border bg-muted/50 p-4">
+        <p className="mb-3 text-sm font-medium text-foreground">
+          Welke Linux distributie draai je? <InfoTooltip text="Het install-script detecteert dit automatisch, maar de handleiding toont de juiste commando's op basis van je keuze hier." />
+        </p>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setDistro("debian")}
+            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+              distro === "debian"
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:bg-muted/80"
+            }`}
+          >
+            Ubuntu / Debian
+          </button>
+          <button
+            onClick={() => setDistro("rhel")}
+            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+              distro === "rhel"
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:bg-muted/80"
+            }`}
+          >
+            CentOS / AlmaLinux / Rocky
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {distro === "debian"
+            ? "Gebruikt apt, ufw, en /etc/nginx/sites-available/. Aanbevolen: Ubuntu 22.04+ of Debian 11+."
+            : "Gebruikt dnf, firewalld, en /etc/nginx/conf.d/. Ondersteund: CentOS Stream 9, AlmaLinux 9, Rocky Linux 9."}
+        </p>
+      </div>
+
       {/* Table of contents */}
       <nav className="mb-12 rounded-lg border border-border bg-muted/50 p-5">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Inhoud</h2>
