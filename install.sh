@@ -621,7 +621,30 @@ configure_firewall() {
 
 # --- Create update script ---
 create_update_script() {
-  cat > /usr/local/bin/lovable-update <<UPDATEEOF
+  if [[ "$INSTALL_MODE" == "database" ]]; then
+    # Database-only mode: geen frontend, alleen infra + supabase restart
+    cat > /usr/local/bin/lovable-update <<UPDATEEOF
+#!/bin/bash
+set -euo pipefail
+
+INFRA_DIR="$INFRA_DIR"
+SUPABASE_DIR="$SUPABASE_DIR"
+
+echo "=== Lovable Supabase Updater ==="
+echo ""
+
+echo "[1/2] Infra-repo updaten..."
+cd "\$INFRA_DIR" && git pull
+
+echo "[2/2] Supabase stack herstarten..."
+cd "\$SUPABASE_DIR" && docker compose up -d
+
+echo ""
+echo "✅ Update compleet!"
+UPDATEEOF
+  else
+    # Full of frontend mode: inclusief app rebuild
+    cat > /usr/local/bin/lovable-update <<UPDATEEOF
 #!/bin/bash
 set -euo pipefail
 
@@ -629,6 +652,7 @@ INFRA_DIR="$INFRA_DIR"
 APP_DIR="$APP_DIR"
 SUPABASE_DIR="$SUPABASE_DIR"
 PROJECT_TYPE="$PROJECT_TYPE"
+MIGRATIONS_DONE_DIR="$SUPABASE_DIR/.migrations_done"
 
 echo "=== Lovable App Updater ==="
 echo ""
@@ -660,14 +684,23 @@ docker run -d \\
   -p 3000:3000 \\
   lovable-frontend
 
-# 5. Database migraties
+# 5. Database migraties (alleen nieuwe)
 echo "[5/5] Database migraties controleren..."
+mkdir -p "\$MIGRATIONS_DONE_DIR"
 if [[ -d "\$APP_DIR/supabase/migrations" ]]; then
-  cp "\$APP_DIR/supabase/migrations/"*.sql "\$SUPABASE_DIR/volumes/db/init/" 2>/dev/null || true
   for migration in "\$APP_DIR/supabase/migrations/"*.sql; do
     if [[ -f "\$migration" ]]; then
-      echo "  Migratie: \$(basename "\$migration")"
-      docker exec supabase-db psql -U supabase -d postgres -f "/docker-entrypoint-initdb.d/\$(basename "\$migration")" 2>/dev/null || true
+      local_name="\$(basename "\$migration")"
+      if [[ ! -f "\$MIGRATIONS_DONE_DIR/\$local_name" ]]; then
+        echo "  Nieuwe migratie: \$local_name"
+        cp "\$migration" "\$SUPABASE_DIR/volumes/db/init/\$local_name"
+        if docker exec -i supabase-db psql -U supabase -d postgres --single-transaction < "\$migration"; then
+          touch "\$MIGRATIONS_DONE_DIR/\$local_name"
+          echo "    ✅ Succesvol"
+        else
+          echo "    ❌ Mislukt — controleer handmatig"
+        fi
+      fi
     fi
   done
 fi
@@ -675,6 +708,7 @@ fi
 echo ""
 echo "✅ Update compleet!"
 UPDATEEOF
+  fi
 
   chmod +x /usr/local/bin/lovable-update
 }

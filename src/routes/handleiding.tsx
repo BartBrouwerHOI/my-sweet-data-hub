@@ -22,6 +22,7 @@ function HandleidingPage() {
   const [distro, setDistro] = useState<Distro>("debian");
 
   const [userConfig, setUserConfig] = useState({
+    infraUrl: "",
     appUser: "",
     appRepo: "",
     serverIp: "",
@@ -36,6 +37,7 @@ function HandleidingPage() {
         const parsed = JSON.parse(saved);
         // Migrate old format (drop infraUser/infraRepo if present)
         setUserConfig({
+          infraUrl: parsed.infraUrl || "",
           appUser: parsed.appUser || parsed.githubUser || "",
           appRepo: parsed.appRepo || parsed.repoName || "",
           serverIp: parsed.serverIp || "",
@@ -56,6 +58,7 @@ function HandleidingPage() {
 
   const fill = useCallback((text: string): string => {
     let result = text;
+    if (userConfig.infraUrl) result = result.replace(/INFRA-REPO-URL/g, userConfig.infraUrl);
     if (userConfig.appUser) result = result.replace(/APP-USER/g, userConfig.appUser);
     if (userConfig.appRepo) result = result.replace(/APP-REPO/g, userConfig.appRepo);
     if (userConfig.serverIp) result = result.replace(/JOUW-SERVER-IP/g, userConfig.serverIp);
@@ -189,6 +192,11 @@ function HandleidingPage() {
         <p className="mb-4 text-xs text-muted-foreground">
           Vul je gegevens in — alle commando's in de handleiding worden automatisch aangepast zodat je ze direct kunt kopiëren en plakken.
         </p>
+
+        <p className="mb-2 text-xs font-semibold text-foreground uppercase tracking-wide">🔧 Infra-repo <span className="font-normal text-muted-foreground">(dit project — publiek)</span></p>
+        <div className="grid grid-cols-1 gap-3 mb-4">
+          <ConfigInput label="HTTPS clone URL" placeholder="INFRA-REPO-URL" value={userConfig.infraUrl} onChange={v => updateField("infraUrl", v)} />
+        </div>
 
         <p className="mb-2 text-xs font-semibold text-foreground uppercase tracking-wide">📦 App-repo <span className="font-normal text-muted-foreground">(jouw Lovable project dat je wilt deployen)</span></p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 mb-4">
@@ -391,9 +399,7 @@ ssh -T -i ~/.ssh/deploy_key git@github.com`}</CodeBlock>
 
           <p><strong>Stap 1:</strong> Clone de <strong>infra-repo</strong> (publiek, geen key nodig):</p>
           <CodeBlock fill={fill}>{`# Clone de infra-repo via HTTPS (geen deploy key nodig)
-sudo mkdir -p /opt/lovable-infra
-sudo chown $USER:$USER /opt/lovable-infra
-git clone https://github.com/lovable-vps/lovable-infra.git /opt/lovable-infra`}</CodeBlock>
+git clone INFRA-REPO-URL /opt/lovable-infra`}</CodeBlock>
 
           <p><strong>Stap 2:</strong> Start de installer:</p>
           <CodeBlock fill={fill}>{`sudo bash /opt/lovable-infra/install.sh`}</CodeBlock>
@@ -424,9 +430,7 @@ git clone https://github.com/lovable-vps/lovable-infra.git /opt/lovable-infra`}<
           <Location icon="terminal" text="Terminal op Server A" />
           <p>Op Server A draai je de volledige Supabase stack (database, login, API, opslag):</p>
           <CodeBlock fill={fill}>{`# Clone de infra-repo via HTTPS (geen deploy key nodig)
-sudo mkdir -p /opt/lovable-infra
-sudo chown $USER:$USER /opt/lovable-infra
-git clone https://github.com/lovable-vps/lovable-infra.git /opt/lovable-infra
+git clone INFRA-REPO-URL /opt/lovable-infra
 
 # Start de installer
 sudo bash /opt/lovable-infra/install.sh
@@ -458,9 +462,7 @@ sudo firewall-cmd --reload`}</CodeBlock>
           <Location icon="terminal" text="Terminal op Server B" />
           <p>Op Server B draait alleen de React app — geen database, geen Supabase services:</p>
           <CodeBlock fill={fill}>{`# Clone de infra-repo via HTTPS (geen deploy key nodig)
-sudo mkdir -p /opt/lovable-infra
-sudo chown $USER:$USER /opt/lovable-infra
-git clone https://github.com/lovable-vps/lovable-infra.git /opt/lovable-infra
+git clone INFRA-REPO-URL /opt/lovable-infra
 
 # Start de installer
 sudo bash /opt/lovable-infra/install.sh
@@ -485,7 +487,10 @@ docker ps
 # Test of de frontend reageert
 curl -I http://localhost:3000
 
-# Test de Supabase API (vervang JOUW_ANON_KEY)
+# Je Anon Key opzoeken (nodig voor de API-test hieronder):
+cat /opt/supabase/credentials.txt | grep "Anon Key"
+
+# Test de Supabase API (vervang JOUW_ANON_KEY met de key hierboven)
 curl http://localhost:8000/rest/v1/ -H "apikey: JOUW_ANON_KEY"`}</CodeBlock>
             <Location icon="browser" text="Browser op je eigen computer" />
             <CodeBlock fill={fill}>{`# Open deze adressen in je browser:
@@ -498,7 +503,10 @@ https://jouw-domein.nl:8080   → Supabase Studio (admin paneel)`}</CodeBlock>
             <CodeBlock fill={fill}>{`# Controleer of alle Supabase containers draaien
 docker ps
 
-# Test de API
+# Anon Key opzoeken:
+cat /opt/supabase/credentials.txt | grep "Anon Key"
+
+# Test de API (vervang JOUW_ANON_KEY)
 curl http://localhost:8000/rest/v1/ -H "apikey: JOUW_ANON_KEY"
 
 # Studio openen in browser: http://SERVER_A_IP:8080`}</CodeBlock>
@@ -540,13 +548,18 @@ lovable-update
 
 # Dit doet: git pull → docker build → restart container`}</CodeBlock>
             <Location icon="terminal" text="Terminal op Server A (alleen bij database-wijzigingen)" />
-            <CodeBlock fill={fill}>{`# Nieuwe migraties toepassen:
-cd /opt/lovable-app
-git pull
+            <CodeBlock fill={fill}>{`# Kopieer de nieuwste migraties van Server B naar Server A:
+# (draai dit op je EIGEN computer of via scp)
+scp root@JOUW-SERVER-IP:/opt/lovable-app/supabase/migrations/*.sql /tmp/
+scp /tmp/*.sql root@SERVER_A_IP:/tmp/migrations/
 
-# Migraties handmatig draaien:
-for f in supabase/migrations/*.sql; do
-  docker exec -i supabase-db psql -U supabase -d postgres < "$f"
+# Of clone de app-repo op Server A (eenmalig):
+git clone git@github.com:APP-USER/APP-REPO.git /opt/lovable-app
+
+# Migraties draaien (alleen nieuwe bestanden):
+for f in /opt/lovable-app/supabase/migrations/*.sql; do
+  echo "Migratie: $(basename $f)"
+  docker exec -i supabase-db psql -U supabase -d postgres --single-transaction < "$f"
 done`}</CodeBlock>
           </>
         )}

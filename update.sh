@@ -26,9 +26,23 @@ echo ""
 INFRA_DIR="${INFRA_DIR:-/opt/lovable-infra}"
 APP_DIR="${APP_DIR:-/opt/lovable-app}"
 SUPABASE_DIR="${SUPABASE_DIR:-/opt/supabase}"
+MIGRATIONS_DONE_DIR="$SUPABASE_DIR/.migrations_done"
+
+# Detecteer of dit een database-only server is (geen app-dir)
+if [[ ! -d "$APP_DIR" ]]; then
+  echo -e "${GREEN}[1/2]${NC} Infra-repo updaten..."
+  cd "$INFRA_DIR" && git pull
+
+  echo -e "${GREEN}[2/2]${NC} Supabase stack herstarten..."
+  cd "$SUPABASE_DIR" && docker compose up -d
+
+  echo ""
+  echo -e "${GREEN}✅ Update compleet (database-only)!${NC}"
+  exit 0
+fi
 
 # Detecteer projecttype
-if [[ -f "$APP_DIR/package.json" ]] && grep -q '"@tanstack/react-start"' "$APP_DIR/package.json" 2>/dev/null; then
+if grep -q '"@tanstack/react-start"' "$APP_DIR/package.json" 2>/dev/null; then
   PROJECT_TYPE="ssr"
 else
   PROJECT_TYPE="spa"
@@ -66,14 +80,23 @@ docker run -d \
   -p 3000:3000 \
   lovable-frontend
 
-# 5. Database migraties
+# 5. Database migraties (alleen nieuwe)
 echo -e "${GREEN}[5/5]${NC} Database migraties controleren..."
+mkdir -p "$MIGRATIONS_DONE_DIR"
 if [[ -d "$APP_DIR/supabase/migrations" ]]; then
-  cp "$APP_DIR/supabase/migrations/"*.sql "$SUPABASE_DIR/volumes/db/init/" 2>/dev/null || true
   for migration in "$APP_DIR/supabase/migrations/"*.sql; do
     if [[ -f "$migration" ]]; then
-      echo "  Migratie: $(basename "$migration")"
-      docker exec supabase-db psql -U supabase -d postgres -f "/docker-entrypoint-initdb.d/$(basename "$migration")" 2>/dev/null || true
+      local_name="$(basename "$migration")"
+      if [[ ! -f "$MIGRATIONS_DONE_DIR/$local_name" ]]; then
+        echo "  Nieuwe migratie: $local_name"
+        cp "$migration" "$SUPABASE_DIR/volumes/db/init/$local_name"
+        if docker exec -i supabase-db psql -U supabase -d postgres --single-transaction < "$migration"; then
+          touch "$MIGRATIONS_DONE_DIR/$local_name"
+          echo "    ✅ Succesvol"
+        else
+          echo "    ❌ Mislukt — controleer handmatig"
+        fi
+      fi
     fi
   done
 fi
