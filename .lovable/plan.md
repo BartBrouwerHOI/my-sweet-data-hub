@@ -1,90 +1,53 @@
 
-## Plan: installer robuust maken voor bestaande /opt/lovable-app map
 
-### Diagnose
-De SSH-verbinding werkt nu wel:  
-`Hi BartBrouwerHOI/Access-Guardian! You've successfully authenticated...`
+## Plan: docker-compose.yml check toevoegen aan install.sh
 
-De nieuwe fout komt door iets anders:
-
-1. `git clone` faalt omdat `/opt/lovable-app` al bestaat en niet leeg is
-2. daarna is `/opt/lovable-app` handmatig verwijderd terwijl de shell nog **in die map** stond
-3. daardoor krijg je:
-   - `getcwd: cannot access parent directories`
-   - `bash: install.sh: No such file or directory`
-
-Met andere woorden: niet SSH is nu het probleem, maar de installer-flow rond een half-bestaande app-map.
+### Probleem
+Na een succesvolle `git clone` crasht `setup_supabase()` met `cp: cannot stat` als `docker-compose.yml` om welke reden dan ook niet in de repo zit. Daarnaast draait de gebruiker mogelijk een oudere versie van `install.sh` die niet overeenkomt met de repo-versie.
 
 ### Aanpak
 
-#### 1. `install.sh` veiliger maken bij bestaande app-map
-In `clone_app()` de huidige check uitbreiden:
+#### 1. `install.sh` — check in `setup_supabase()`
+Vóór het `cp` commando controleren of het bestand bestaat:
 
-- als `/opt/lovable-app` een geldige git repo is: `git pull`
-- als `/opt/lovable-app` bestaat maar **geen** geldige repo is:
-  - duidelijke melding tonen
-  - uitleggen dat dit meestal een lege/incomplete map van een eerdere poging is
-  - vragen of het script de map veilig mag verwijderen en opnieuw clonen
-- vóór verwijderen eerst naar een veilige map gaan (bijv. `/`) zodat het script nooit “zijn eigen werkdirectory” kwijt raakt
-- daarna pas opnieuw `git clone`
+```bash
+if [[ ! -f "$APP_DIR/docker-compose.yml" ]]; then
+  log_error "docker-compose.yml niet gevonden in $APP_DIR"
+  log_error "Controleer of je repo dit bestand bevat."
+  exit 1
+fi
+```
 
-Dit voorkomt dat gebruikers zelf `rm -rf /opt/lovable-app` hoeven uit te voeren vanuit de verkeerde directory.
+#### 2. `install.sh` — self-update mechanisme
+Na succesvolle clone/pull, als de repo een nieuwere `install.sh` bevat, het lopende script vervangen door de repo-versie en opnieuw starten:
 
-#### 2. Handleiding corrigeren voor handmatige `install.sh` flow
-In `src/routes/handleiding.tsx` de fallback-instructies aanscherpen:
+```bash
+# Na clone/pull in clone_app():
+if [[ -f "$APP_DIR/install.sh" ]]; then
+  cp "$APP_DIR/install.sh" /usr/local/bin/lovable-install
+  chmod +x /usr/local/bin/lovable-install
+  log_info "install.sh bijgewerkt vanuit repo."
+  # Herstart met de nieuwe versie als die verschilt
+  if ! cmp -s "$0" "$APP_DIR/install.sh"; then
+    log_info "Nieuwere versie gevonden, herstart met bijgewerkte installer..."
+    exec bash "$APP_DIR/install.sh" "$@"
+  fi
+fi
+```
 
-- vóór `nano /opt/lovable-app/install.sh` eerst de map aanmaken:
-  - `sudo mkdir -p /opt/lovable-app`
-- starten met een **absoluut pad**:
-  - `sudo bash /opt/lovable-app/install.sh`
-  - niet afhankelijk van de huidige directory
-- extra waarschuwing toevoegen:
-  - als je `/opt/lovable-app` verwijdert terwijl je daarin staat, doe eerst `cd ~` of `cd /root`
-
-#### 3. Embedded `installScript` synchroniseren
-De ingebouwde `installScript` string in `InstallShMissing` updaten met dezelfde robuustere logica als de echte `install.sh`, zodat handmatig gekopieerde versies exact hetzelfde gedrag hebben.
-
-#### 4. Troubleshooting aanvullen
-Een korte troubleshooting-blok toevoegen voor deze 3 concrete meldingen:
-
-- `destination path '/opt/lovable-app' already exists and is not an empty directory`
-- `getcwd: cannot access parent directories`
-- `bash: install.sh: No such file or directory`
-
-Met bijbehorende uitleg in gewone taal:
-- map bestaat al/incompleet
-- je staat in een map die je net verwijderd hebt
-- daarom is `install.sh` ook weg of niet meer bereikbaar
+#### 3. `src/routes/handleiding.tsx` — embedded script synchroniseren
+De embedded `installScript` string bijwerken met dezelfde checks.
 
 ### Bestanden
 | Bestand | Actie |
 |---|---|
-| `install.sh` | bestaande/incomplete app-map detecteren, veilige cleanup prompt, daarna opnieuw clonen |
-| `src/routes/handleiding.tsx` | handmatige stappen aanpassen: map aanmaken, absoluut pad gebruiken, waarschuwing over verwijderen vanuit huidige map |
-| `src/routes/handleiding.tsx` | embedded `installScript` gelijktrekken met de echte fix |
-| `src/routes/handleiding.tsx` | troubleshooting uitbreiden met deze specifieke foutmeldingen |
+| `install.sh` | Bestandscheck vóór cp + self-update na clone |
+| `src/routes/handleiding.tsx` | Embedded script synchroniseren |
 
-### Technische details
-- Gebruik een repo-check die echt onderscheid maakt tussen:
-  - bestaande geldige repo
-  - bestaande map zonder repo
-- Bij cleanup eerst uit de doelmap weg:
-  ```text
-  cd /
-  rm -rf /opt/lovable-app
-  ```
-- Gebruik in documentatie consequent:
-  ```text
-  sudo bash /opt/lovable-app/install.sh
-  ```
-  in plaats van:
-  ```text
-  sudo bash install.sh
-  ```
+### Directe oplossing voor nu
+De gebruiker kan nu al verder met:
+```bash
+cd ~
+sudo bash /opt/lovable-app/install.sh
+```
 
-### Resultaat
-Na deze wijziging:
-1. blokkeert de installer niet meer onduidelijk op een half-bestaande `/opt/lovable-app`
-2. hoeven gebruikers niet meer handmatig in een kapotte shell-state terecht te komen
-3. is de handleiding veilig om opnieuw te starten, ook na een mislukte eerdere poging
-4. is duidelijk dat de SSH-check nu geslaagd is en dat alleen de map-/rerun-flow nog opgelost moest worden
