@@ -977,59 +977,75 @@ generate_secrets() {
 
 clone_app() {
   log_info "App clonen..."
-  if [[ -d "\$APP_DIR" && -f "\$APP_DIR/docker-compose.yml" ]]; then
-    cd "\$APP_DIR" && git pull
-  else
-    echo ""
-    echo -e "\${BLUE}Het script gaat nu je app-code clonen van GitHub.\${NC}"
-    echo "  Plak de SSH URL van je repo. Die vind je op GitHub → Code → SSH."
-    echo "  Voorbeeld: git@github.com:JOUW-USER/JOUW-REPO.git"
-    echo ""
-    echo -e "  \${YELLOW}⚠ Dit is NIET de inhoud van install.sh — alleen de repo-URL!\${NC}"
-    echo ""
 
-    while true; do
-      read -p "GitHub repo URL (SSH): " GITHUB_REPO
-      if [[ -z "\$GITHUB_REPO" ]]; then
-        log_error "Invoer is leeg. Plak de SSH URL van je GitHub repo."
-        continue
-      fi
-      if [[ "\$GITHUB_REPO" == *"#!/bin/bash"* || "\$GITHUB_REPO" == *$'\\n'* ]]; then
-        log_error "Het lijkt erop dat je de inhoud van install.sh hebt geplakt!"
-        echo "  Plak alleen de SSH URL, bijv.: git@github.com:user/repo.git"
-        continue
-      fi
-      if [[ ! "\$GITHUB_REPO" =~ ^git@github\\.com:.+/.+\\.git\$ ]]; then
-        log_error "Ongeldig formaat. Verwacht: git@github.com:USER/REPO.git"
-        echo "  Gevonden: \$GITHUB_REPO"
-        read -p "Toch doorgaan met deze URL? (j/n): " confirm
-        [[ "\$confirm" != "j" ]] && continue
-      fi
-      break
-    done
-
-    log_info "SSH-verbinding met GitHub testen..."
-    local ssh_output
-    ssh_output=\$(ssh -T -o ConnectTimeout=10 git@github.com 2>&1 || true)
-    if ! echo "\$ssh_output" | grep -q "successfully authenticated"; then
-      log_error "SSH-verbinding met GitHub mislukt!"
+  if [[ -d "\$APP_DIR" ]]; then
+    if [[ -d "\$APP_DIR/.git" && -f "\$APP_DIR/docker-compose.yml" ]]; then
+      log_info "Geldige repo gevonden, git pull..."
+      cd "\$APP_DIR" && git pull
+      return
+    else
+      log_warn "Map \$APP_DIR bestaat maar is geen geldige repo."
       echo ""
-      echo "  Mogelijke oorzaken:"
-      echo "  1. Geen deploy key aangemaakt — voer uit:"
-      echo "     ssh-keygen -t ed25519 -C deploy@vps -f ~/.ssh/deploy_key -N \\\"\\\""
-      echo "  2. Deploy key niet toegevoegd aan GitHub repo → Settings → Deploy keys"
-      echo "  3. SSH config ontbreekt — maak ~/.ssh/config aan met:"
-      echo "     Host github.com"
-      echo "       IdentityFile ~/.ssh/deploy_key"
-      echo "       IdentitiesOnly yes"
-      echo ""
-      echo "  Test handmatig: ssh -T git@github.com"
-      echo ""
-      read -p "Wil je toch doorgaan met clonen? (j/n): " confirm
-      [[ "\$confirm" != "j" ]] && exit 1
+      echo "  Dit komt meestal door een eerdere mislukte installatie."
+      read -p "  Mag ik \$APP_DIR verwijderen en opnieuw clonen? (j/n): " confirm
+      if [[ "\$confirm" == "j" ]]; then
+        cd /
+        rm -rf "\$APP_DIR"
+        log_info "Map verwijderd."
+      else
+        log_error "Kan niet doorgaan. Verwijder handmatig: cd ~ && sudo rm -rf \$APP_DIR"
+        exit 1
+      fi
     fi
-    git clone "\$GITHUB_REPO" "\$APP_DIR"
   fi
+
+  echo ""
+  echo -e "\${BLUE}Het script gaat nu je app-code clonen van GitHub.\${NC}"
+  echo "  Plak de SSH URL van je repo. Die vind je op GitHub → Code → SSH."
+  echo "  Voorbeeld: git@github.com:JOUW-USER/JOUW-REPO.git"
+  echo ""
+  echo -e "  \${YELLOW}⚠ Dit is NIET de inhoud van install.sh — alleen de repo-URL!\${NC}"
+  echo ""
+
+  while true; do
+    read -p "GitHub repo URL (SSH): " GITHUB_REPO
+    if [[ -z "\$GITHUB_REPO" ]]; then
+      log_error "Invoer is leeg. Plak de SSH URL van je GitHub repo."
+      continue
+    fi
+    if [[ "\$GITHUB_REPO" == *"#!/bin/bash"* || "\$GITHUB_REPO" == *$'\\n'* ]]; then
+      log_error "Het lijkt erop dat je de inhoud van install.sh hebt geplakt!"
+      echo "  Plak alleen de SSH URL, bijv.: git@github.com:user/repo.git"
+      continue
+    fi
+    if [[ ! "\$GITHUB_REPO" =~ ^git@github\\.com:.+/.+\\.git\$ ]]; then
+      log_error "Ongeldig formaat. Verwacht: git@github.com:USER/REPO.git"
+      echo "  Gevonden: \$GITHUB_REPO"
+      read -p "Toch doorgaan met deze URL? (j/n): " confirm
+      [[ "\$confirm" != "j" ]] && continue
+    fi
+    break
+  done
+
+  log_info "SSH-verbinding met GitHub testen..."
+  local ssh_output
+  ssh_output=\$(ssh -T -o ConnectTimeout=10 git@github.com 2>&1 || true)
+  if ! echo "\$ssh_output" | grep -q "successfully authenticated"; then
+    log_error "SSH-verbinding met GitHub mislukt!"
+    echo ""
+    echo "  Mogelijke oorzaken:"
+    echo "  1. Geen deploy key aangemaakt"
+    echo "  2. Deploy key niet toegevoegd aan GitHub repo"
+    echo "  3. SSH config ontbreekt"
+    echo ""
+    echo "  💡 Draai je dit met sudo? Kopieer je key naar root:"
+    echo "     sudo cp ~/.ssh/deploy_key /root/.ssh/deploy_key"
+    echo "     sudo cp ~/.ssh/config /root/.ssh/config"
+    echo ""
+    read -p "Wil je toch doorgaan met clonen? (j/n): " confirm
+    [[ "\$confirm" != "j" ]] && exit 1
+  fi
+  git clone "\$GITHUB_REPO" "\$APP_DIR"
 }
 
 setup_supabase() {
