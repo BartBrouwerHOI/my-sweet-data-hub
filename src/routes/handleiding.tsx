@@ -661,6 +661,10 @@ cd /opt/supabase && docker compose restart auth`}</CodeBlock>
             <TroubleItem q="Frontend kan Server A niet bereiken" a="Check firewall op Server A: sudo ufw status. Test verbinding: curl http://SERVER_A_IP:8000/rest/v1/. Poort 8000 moet open staan voor het IP van Server B." />
           )}
           <TroubleItem q="'Permission denied' bij commando's" a="Gebruik sudo voor commando's die root-rechten nodig hebben, bijv: sudo bash install.sh" />
+          <TroubleItem q="'destination path /opt/lovable-app already exists and is not an empty directory'" a="De map bestaat al van een eerdere (mislukte) poging. Verwijder hem: cd ~ && sudo rm -rf /opt/lovable-app — en draai dan opnieuw: sudo bash /opt/lovable-app/install.sh. Het bijgewerkte install-script vraagt dit nu automatisch." />
+          <TroubleItem q="'getcwd: cannot access parent directories'" a="Je staat in een map die net verwijderd is. Typ eerst: cd ~ (of cd /root) om naar een bestaande map te gaan, en probeer dan je commando opnieuw." />
+          <TroubleItem q="'bash: install.sh: No such file or directory'" a="Je staat niet in de juiste map, of de map is verwijderd. Gebruik altijd het volledige pad: sudo bash /opt/lovable-app/install.sh. Als de map niet meer bestaat, clone je repo opnieuw." />
+          <TroubleItem q="SSH werkt als gebruiker maar niet met sudo" a="sudo draait als root en gebruikt /root/.ssh/. Kopieer je key: sudo cp ~/.ssh/deploy_key /root/.ssh/deploy_key && sudo cp ~/.ssh/config /root/.ssh/config. Test daarna: sudo ssh -T git@github.com" />
         </div>
       </Step>
 
@@ -973,59 +977,75 @@ generate_secrets() {
 
 clone_app() {
   log_info "App clonen..."
-  if [[ -d "\$APP_DIR" && -f "\$APP_DIR/docker-compose.yml" ]]; then
-    cd "\$APP_DIR" && git pull
-  else
-    echo ""
-    echo -e "\${BLUE}Het script gaat nu je app-code clonen van GitHub.\${NC}"
-    echo "  Plak de SSH URL van je repo. Die vind je op GitHub → Code → SSH."
-    echo "  Voorbeeld: git@github.com:JOUW-USER/JOUW-REPO.git"
-    echo ""
-    echo -e "  \${YELLOW}⚠ Dit is NIET de inhoud van install.sh — alleen de repo-URL!\${NC}"
-    echo ""
 
-    while true; do
-      read -p "GitHub repo URL (SSH): " GITHUB_REPO
-      if [[ -z "\$GITHUB_REPO" ]]; then
-        log_error "Invoer is leeg. Plak de SSH URL van je GitHub repo."
-        continue
-      fi
-      if [[ "\$GITHUB_REPO" == *"#!/bin/bash"* || "\$GITHUB_REPO" == *$'\\n'* ]]; then
-        log_error "Het lijkt erop dat je de inhoud van install.sh hebt geplakt!"
-        echo "  Plak alleen de SSH URL, bijv.: git@github.com:user/repo.git"
-        continue
-      fi
-      if [[ ! "\$GITHUB_REPO" =~ ^git@github\\.com:.+/.+\\.git\$ ]]; then
-        log_error "Ongeldig formaat. Verwacht: git@github.com:USER/REPO.git"
-        echo "  Gevonden: \$GITHUB_REPO"
-        read -p "Toch doorgaan met deze URL? (j/n): " confirm
-        [[ "\$confirm" != "j" ]] && continue
-      fi
-      break
-    done
-
-    log_info "SSH-verbinding met GitHub testen..."
-    local ssh_output
-    ssh_output=\$(ssh -T -o ConnectTimeout=10 git@github.com 2>&1 || true)
-    if ! echo "\$ssh_output" | grep -q "successfully authenticated"; then
-      log_error "SSH-verbinding met GitHub mislukt!"
+  if [[ -d "\$APP_DIR" ]]; then
+    if [[ -d "\$APP_DIR/.git" && -f "\$APP_DIR/docker-compose.yml" ]]; then
+      log_info "Geldige repo gevonden, git pull..."
+      cd "\$APP_DIR" && git pull
+      return
+    else
+      log_warn "Map \$APP_DIR bestaat maar is geen geldige repo."
       echo ""
-      echo "  Mogelijke oorzaken:"
-      echo "  1. Geen deploy key aangemaakt — voer uit:"
-      echo "     ssh-keygen -t ed25519 -C deploy@vps -f ~/.ssh/deploy_key -N \\\"\\\""
-      echo "  2. Deploy key niet toegevoegd aan GitHub repo → Settings → Deploy keys"
-      echo "  3. SSH config ontbreekt — maak ~/.ssh/config aan met:"
-      echo "     Host github.com"
-      echo "       IdentityFile ~/.ssh/deploy_key"
-      echo "       IdentitiesOnly yes"
-      echo ""
-      echo "  Test handmatig: ssh -T git@github.com"
-      echo ""
-      read -p "Wil je toch doorgaan met clonen? (j/n): " confirm
-      [[ "\$confirm" != "j" ]] && exit 1
+      echo "  Dit komt meestal door een eerdere mislukte installatie."
+      read -p "  Mag ik \$APP_DIR verwijderen en opnieuw clonen? (j/n): " confirm
+      if [[ "\$confirm" == "j" ]]; then
+        cd /
+        rm -rf "\$APP_DIR"
+        log_info "Map verwijderd."
+      else
+        log_error "Kan niet doorgaan. Verwijder handmatig: cd ~ && sudo rm -rf \$APP_DIR"
+        exit 1
+      fi
     fi
-    git clone "\$GITHUB_REPO" "\$APP_DIR"
   fi
+
+  echo ""
+  echo -e "\${BLUE}Het script gaat nu je app-code clonen van GitHub.\${NC}"
+  echo "  Plak de SSH URL van je repo. Die vind je op GitHub → Code → SSH."
+  echo "  Voorbeeld: git@github.com:JOUW-USER/JOUW-REPO.git"
+  echo ""
+  echo -e "  \${YELLOW}⚠ Dit is NIET de inhoud van install.sh — alleen de repo-URL!\${NC}"
+  echo ""
+
+  while true; do
+    read -p "GitHub repo URL (SSH): " GITHUB_REPO
+    if [[ -z "\$GITHUB_REPO" ]]; then
+      log_error "Invoer is leeg. Plak de SSH URL van je GitHub repo."
+      continue
+    fi
+    if [[ "\$GITHUB_REPO" == *"#!/bin/bash"* || "\$GITHUB_REPO" == *$'\\n'* ]]; then
+      log_error "Het lijkt erop dat je de inhoud van install.sh hebt geplakt!"
+      echo "  Plak alleen de SSH URL, bijv.: git@github.com:user/repo.git"
+      continue
+    fi
+    if [[ ! "\$GITHUB_REPO" =~ ^git@github\\.com:.+/.+\\.git\$ ]]; then
+      log_error "Ongeldig formaat. Verwacht: git@github.com:USER/REPO.git"
+      echo "  Gevonden: \$GITHUB_REPO"
+      read -p "Toch doorgaan met deze URL? (j/n): " confirm
+      [[ "\$confirm" != "j" ]] && continue
+    fi
+    break
+  done
+
+  log_info "SSH-verbinding met GitHub testen..."
+  local ssh_output
+  ssh_output=\$(ssh -T -o ConnectTimeout=10 git@github.com 2>&1 || true)
+  if ! echo "\$ssh_output" | grep -q "successfully authenticated"; then
+    log_error "SSH-verbinding met GitHub mislukt!"
+    echo ""
+    echo "  Mogelijke oorzaken:"
+    echo "  1. Geen deploy key aangemaakt"
+    echo "  2. Deploy key niet toegevoegd aan GitHub repo"
+    echo "  3. SSH config ontbreekt"
+    echo ""
+    echo "  💡 Draai je dit met sudo? Kopieer je key naar root:"
+    echo "     sudo cp ~/.ssh/deploy_key /root/.ssh/deploy_key"
+    echo "     sudo cp ~/.ssh/config /root/.ssh/config"
+    echo ""
+    read -p "Wil je toch doorgaan met clonen? (j/n): " confirm
+    [[ "\$confirm" != "j" ]] && exit 1
+  fi
+  git clone "\$GITHUB_REPO" "\$APP_DIR"
 }
 
 setup_supabase() {
@@ -1228,17 +1248,22 @@ main "\$@"`;
           <div className="border-t border-border px-3 py-2 text-xs text-muted-foreground space-y-2">
             <p className="font-semibold text-foreground">Stap-voor-stap:</p>
             <div className="space-y-1.5">
-              <p><strong>Stap 1:</strong> Maak het bestand aan op je server:</p>
+              <p><strong>Stap 1:</strong> Maak de map aan (als die nog niet bestaat):</p>
+              <pre className="rounded bg-muted px-2 py-1 text-[11px]"><code>sudo mkdir -p /opt/lovable-app</code></pre>
+              <p><strong>Stap 2:</strong> Maak het bestand aan op je server:</p>
               <pre className="rounded bg-muted px-2 py-1 text-[11px]"><code>nano /opt/lovable-app/install.sh</code></pre>
-              <p><strong>Stap 2:</strong> Plak de gekopieerde inhoud in nano → opslaan met <code className="rounded bg-muted px-1">Ctrl+O</code>, <code className="rounded bg-muted px-1">Enter</code>, sluiten met <code className="rounded bg-muted px-1">Ctrl+X</code></p>
-              <p><strong>Stap 3:</strong> Maak uitvoerbaar en start de installatie:</p>
-              <pre className="rounded bg-muted px-2 py-1 text-[11px]"><code>chmod +x /opt/lovable-app/install.sh{"\n"}cd /opt/lovable-app{"\n"}sudo bash install.sh</code></pre>
-              <p><strong>Stap 4:</strong> Als het script vraagt om <strong>GitHub repo URL</strong>, plak dan de SSH URL van je repo:</p>
+              <p><strong>Stap 3:</strong> Plak de gekopieerde inhoud in nano → opslaan met <code className="rounded bg-muted px-1">Ctrl+O</code>, <code className="rounded bg-muted px-1">Enter</code>, sluiten met <code className="rounded bg-muted px-1">Ctrl+X</code></p>
+              <p><strong>Stap 4:</strong> Maak uitvoerbaar en start de installatie:</p>
+              <pre className="rounded bg-muted px-2 py-1 text-[11px]"><code>chmod +x /opt/lovable-app/install.sh{"\n"}sudo bash /opt/lovable-app/install.sh</code></pre>
+              <p><strong>Stap 5:</strong> Als het script vraagt om <strong>GitHub repo URL</strong>, plak dan de SSH URL van je repo:</p>
               <pre className="rounded bg-muted px-2 py-1 text-[11px]"><code>{fill ? fill("git@github.com:JOUW-USER/JOUW-REPO.git") : "git@github.com:JOUW-USER/JOUW-REPO.git"}</code></pre>
               <p className="text-muted-foreground">Die vind je op GitHub → <strong>Code</strong> knop → tabje <strong>SSH</strong>.</p>
             </div>
             <div className="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 text-foreground">
-              <strong>⚠️ Let op:</strong> Gebruik altijd <code className="rounded bg-muted px-1">sudo bash install.sh</code> — niet <code className="rounded bg-muted px-1">sudo install.sh</code> of <code className="rounded bg-muted px-1">./install.sh</code>. Plak bij de repo-URL vraag <strong>niet</strong> opnieuw de inhoud van install.sh!
+              <strong>⚠️ Let op:</strong> Gebruik altijd het volledige pad: <code className="rounded bg-muted px-1">sudo bash /opt/lovable-app/install.sh</code>. Plak bij de repo-URL vraag <strong>niet</strong> opnieuw de inhoud van install.sh!
+            </div>
+            <div className="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 text-foreground">
+              <strong>💡 Eerdere mislukte poging?</strong> Als je de fout <code className="rounded bg-muted px-1">destination path already exists</code> krijgt, typ eerst <code className="rounded bg-muted px-1">cd ~</code> en dan <code className="rounded bg-muted px-1">sudo rm -rf /opt/lovable-app</code>. Maak de map opnieuw aan en begin bij stap 1.
             </div>
           </div>
         </div>
