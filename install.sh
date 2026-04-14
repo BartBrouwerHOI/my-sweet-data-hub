@@ -376,9 +376,11 @@ ENVEOF
     cp "$INFRA_DIR/volumes/kong/kong.yml" "$SUPABASE_DIR/volumes/kong/kong.yml"
   fi
 
-  # Kopieer database init script (rollen, schema's, extensions)
+  # Kopieer database init script en vervang CHANGEME door het werkelijke wachtwoord
   if [[ -f "$INFRA_DIR/volumes/db/init/00-supabase-init.sql" ]]; then
     cp "$INFRA_DIR/volumes/db/init/00-supabase-init.sql" "$SUPABASE_DIR/volumes/db/init/00-supabase-init.sql"
+    sed -i "s/CHANGEME/$POSTGRES_PASSWORD/g" "$SUPABASE_DIR/volumes/db/init/00-supabase-init.sql"
+    log_info "Database init script gekopieerd en wachtwoorden ingevuld."
   fi
 
   # Migraties komen uit de APP-repo (als die gecloned is)
