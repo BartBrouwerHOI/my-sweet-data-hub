@@ -687,11 +687,12 @@ function Location({ icon, text }: { icon: "terminal" | "browser" | "computer"; t
   );
 }
 
-function CodeBlock({ children, title }: { children: string; title?: React.ReactNode }) {
+function CodeBlock({ children, title, fill }: { children: string; title?: React.ReactNode; fill?: (t: string) => string }) {
   const [copied, setCopied] = useState(false);
+  const displayed = fill ? fill(children) : children;
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(children);
+    await navigator.clipboard.writeText(displayed);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -708,7 +709,7 @@ function CodeBlock({ children, title }: { children: string; title?: React.ReactN
       >
         {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
       </button>
-      <pre className="p-4 text-xs leading-relaxed text-foreground"><code>{children}</code></pre>
+      <pre className="p-4 text-xs leading-relaxed text-foreground"><code>{displayed}</code></pre>
     </div>
   );
 }
