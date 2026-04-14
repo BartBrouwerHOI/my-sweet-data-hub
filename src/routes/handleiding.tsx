@@ -195,7 +195,7 @@ function HandleidingPage() {
 
         <p className="mb-2 text-xs font-semibold text-foreground uppercase tracking-wide">🔧 Infra-repo <span className="font-normal text-muted-foreground">(dit project — publiek)</span></p>
         <div className="grid grid-cols-1 gap-3 mb-4">
-          <ConfigInput label="HTTPS clone URL" placeholder="INFRA-REPO-URL" value={userConfig.infraUrl} onChange={v => updateField("infraUrl", v)} />
+          <ConfigInput label="HTTPS clone URL" placeholder="https://github.com/user/repo.git" value={userConfig.infraUrl} onChange={v => updateField("infraUrl", v)} />
         </div>
 
         <p className="mb-2 text-xs font-semibold text-foreground uppercase tracking-wide">📦 App-repo <span className="font-normal text-muted-foreground">(jouw Lovable project dat je wilt deployen)</span></p>
@@ -487,11 +487,13 @@ docker ps
 # Test of de frontend reageert
 curl -I http://localhost:3000
 
-# Je Anon Key opzoeken (nodig voor de API-test hieronder):
-cat /opt/supabase/credentials.txt | grep "Anon Key"
+# Je credentials opzoeken:
+cat /opt/supabase/credentials.txt`}</CodeBlock>
 
-# Test de Supabase API (vervang JOUW_ANON_KEY met de key hierboven)
-curl http://localhost:8000/rest/v1/ -H "apikey: JOUW_ANON_KEY"`}</CodeBlock>
+            <p className="mt-3"><strong>API testen:</strong> Kopieer de <strong>Anon Key</strong> uit de output hierboven en plak die in het volgende commando:</p>
+            <CodeBlock fill={fill}>{`# Vervang <ANON_KEY> met de key uit credentials.txt
+curl http://localhost:8000/rest/v1/ -H "apikey: <ANON_KEY>"`}</CodeBlock>
+
             <Location icon="browser" text="Browser op je eigen computer" />
             <CodeBlock fill={fill}>{`# Open deze adressen in je browser:
 https://jouw-domein.nl        → je app
@@ -503,20 +505,20 @@ https://jouw-domein.nl:8080   → Supabase Studio (admin paneel)`}</CodeBlock>
             <CodeBlock fill={fill}>{`# Controleer of alle Supabase containers draaien
 docker ps
 
-# Anon Key opzoeken:
-cat /opt/supabase/credentials.txt | grep "Anon Key"
+# Credentials opzoeken:
+cat /opt/supabase/credentials.txt`}</CodeBlock>
 
-# Test de API (vervang JOUW_ANON_KEY)
-curl http://localhost:8000/rest/v1/ -H "apikey: JOUW_ANON_KEY"
+            <p className="mt-3"><strong>API testen:</strong> Kopieer de <strong>Anon Key</strong> uit de output hierboven:</p>
+            <CodeBlock fill={fill}>{`# Vervang <ANON_KEY> met de key uit credentials.txt
+curl http://localhost:8000/rest/v1/ -H "apikey: <ANON_KEY>"
 
 # Studio openen in browser: http://SERVER_A_IP:8080`}</CodeBlock>
+
             <Location icon="terminal" text="Terminal op Server B (frontend)" />
             <CodeBlock fill={fill}>{`# Controleer of de frontend draait
 docker ps
-curl -I http://localhost:3000
+curl -I http://localhost:3000`}</CodeBlock>
 
-# Test of de API via Nginx bereikbaar is
-curl http://localhost/rest/v1/ -H "apikey: JOUW_ANON_KEY"`}</CodeBlock>
             <Location icon="browser" text="Browser op je eigen computer" />
             <p>Open <CopyCode fill={fill}>https://jouw-domein.nl</CopyCode> — je zou je app moeten zien.</p>
           </>
@@ -548,19 +550,11 @@ lovable-update
 
 # Dit doet: git pull → docker build → restart container`}</CodeBlock>
             <Location icon="terminal" text="Terminal op Server A (alleen bij database-wijzigingen)" />
-            <CodeBlock fill={fill}>{`# Kopieer de nieuwste migraties van Server B naar Server A:
-# (draai dit op je EIGEN computer of via scp)
-scp root@JOUW-SERVER-IP:/opt/lovable-app/supabase/migrations/*.sql /tmp/
-scp /tmp/*.sql root@SERVER_A_IP:/tmp/migrations/
+            <CodeBlock fill={fill}>{`# Update de backend (incl. migraties):
+lovable-update
 
-# Of clone de app-repo op Server A (eenmalig):
-git clone git@github.com:APP-USER/APP-REPO.git /opt/lovable-app
-
-# Migraties draaien (alleen nieuwe bestanden):
-for f in /opt/lovable-app/supabase/migrations/*.sql; do
-  echo "Migratie: $(basename $f)"
-  docker exec -i supabase-db psql -U supabase -d postgres --single-transaction < "$f"
-done`}</CodeBlock>
+# Dit doet: git pull (infra + app) → nieuwe migraties draaien → Supabase herstarten`}</CodeBlock>
+            <Tip>Bij de eerste installatie van Server A wordt de app-repo automatisch gecloned (alleen voor migraties). Je hoeft dit niet handmatig te doen.</Tip>
           </>
         )}
         <Tip>De Supabase containers en database blijven intact bij een update — alleen de frontend wordt opnieuw gebouwd.</Tip>
