@@ -277,8 +277,8 @@ ssh -T git@github.com`}</CodeBlock>
           <Location icon="terminal" text="Terminal op je VM" />
           <p>Clone je repo en draai het install-script:</p>
           <CodeBlock>{`# Clone je repo (vervang met je eigen GitHub gebruikersnaam en repo naam)
-# Voorbeeld: git clone git@github.com:jandevries/mijn-app.git /opt/lovable-app
-git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
+# Voorbeeld: sudo git clone git@github.com:jandevries/mijn-app.git /opt/lovable-app
+sudo git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
 
 # Ga naar de map en start de installer
 cd /opt/lovable-app
@@ -307,7 +307,7 @@ sudo bash install.sh`}</CodeBlock>
           <Location icon="terminal" text="Terminal op Server A" />
           <p>Op Server A draai je de volledige Supabase stack (database, login, API, opslag):</p>
           <CodeBlock>{`# Clone je repo (vervang met je eigen GitHub gebruikersnaam en repo naam)
-git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
+sudo git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
 
 # Start de installer
 cd /opt/lovable-app
@@ -342,7 +342,7 @@ sudo firewall-cmd --reload`}</CodeBlock>
           <Location icon="terminal" text="Terminal op Server B" />
           <p>Op Server B draait alleen de React app — geen database, geen Supabase services:</p>
           <CodeBlock>{`# Clone je repo
-git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
+sudo git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
 
 # Start de installer
 cd /opt/lovable-app
