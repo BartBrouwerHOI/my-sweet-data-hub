@@ -28,9 +28,7 @@ Het script detecteert automatisch of je app een **SPA** (Vite + React) of **SSR*
 
 ```bash
 # 1. Clone de infra-repo (publiek, geen key nodig)
-sudo mkdir -p /opt/lovable-infra
-sudo chown $USER:$USER /opt/lovable-infra
-git clone https://github.com/lovable-vps/lovable-infra.git /opt/lovable-infra
+git clone https://github.com/JOUW-USER/JOUW-INFRA-REPO.git /opt/lovable-infra
 
 # 2. Start de installer (vraagt om de SSH URL van je APP-repo)
 sudo bash /opt/lovable-infra/install.sh
@@ -51,7 +49,7 @@ Het script vraagt om:
 lovable-update
 ```
 
-Dit haalt updates op voor zowel de infra-repo als de app-repo, herbouwt de frontend en draait migraties.
+Dit haalt updates op voor zowel de infra-repo als de app-repo, herbouwt de frontend en draait nieuwe migraties (reeds gedraaide migraties worden overgeslagen).
 
 ## Interactieve Handleiding
 
