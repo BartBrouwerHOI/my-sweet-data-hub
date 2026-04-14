@@ -15,9 +15,11 @@ export const Route = createFileRoute("/handleiding")({
 });
 
 type SetupMode = "single" | "split";
+type Distro = "debian" | "rhel";
 
 function HandleidingPage() {
   const [mode, setMode] = useState<SetupMode>("single");
+  const [distro, setDistro] = useState<Distro>("debian");
 
   const singleSteps = [
     { id: "vereisten", title: "Vereisten" },
