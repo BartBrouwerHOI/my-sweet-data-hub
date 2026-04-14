@@ -379,7 +379,17 @@ git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
 
 # Start de installer
 cd /opt/lovable-app
-sudo bash install.sh`}</CodeBlock>
+
+# Controleer of install.sh aanwezig is
+ls install.sh`}</CodeBlock>
+          <Warn>
+            <strong>install.sh niet gevonden?</strong> Dan is het bestand waarschijnlijk niet mee-gepusht naar GitHub. Controleer in je GitHub repo of <CopyCode fill={fill}>install.sh</CopyCode> in de root staat. Zo niet:
+            <ul className="list-inside list-disc mt-1 space-y-1">
+              <li>Ga naar Lovable → Connectors → GitHub en controleer of de sync actief is</li>
+              <li>Of download handmatig: <CopyCode fill={fill}>{`curl -O https://raw.githubusercontent.com/JOUW-USER/JOUW-REPO/main/install.sh`}</CopyCode></li>
+            </ul>
+            Als het bestand er wél is, start de installer: <CopyCode fill={fill}>sudo bash install.sh</CopyCode>
+          </Warn>
           <Tip>
             <strong>JOUW-USER</strong> = je GitHub gebruikersnaam (bijv. <CopyCode fill={fill}>jandevries</CopyCode>)<br />
             <strong>JOUW-REPO</strong> = de naam van je repository (bijv. <CopyCode fill={fill}>mijn-app</CopyCode>)<br />
@@ -411,11 +421,17 @@ sudo chown $USER:$USER /opt/lovable-app
 # Clone als huidige gebruiker
 git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
 
-# Start de installer
+# Controleer of install.sh aanwezig is
+ls install.sh
+
+# Start de installer (als install.sh gevonden is)
 cd /opt/lovable-app
 sudo bash install.sh
 
 # Kies: 2) Alleen database (Supabase stack)`}</CodeBlock>
+          <Warn>
+            <strong>install.sh niet gevonden?</strong> Controleer of het bestand in je GitHub repo staat. Zo niet: <CopyCode fill={fill}>curl -O https://raw.githubusercontent.com/JOUW-USER/JOUW-REPO/main/install.sh</CopyCode>
+          </Warn>
           <p>Het script start alle Supabase containers en <InfoTooltip text="API Gateway — controleert of API-verzoeken een geldige sleutel hebben voordat ze worden doorgestuurd naar de juiste service." /> (API Gateway op poort 8000).</p>
 
           <h4 className="mt-4 font-semibold text-foreground"><InfoTooltip text="Bepaalt welke poorten open of dicht staan op je server — beschermt tegen ongewenste toegang van buitenaf." /> instellen</h4>
@@ -450,7 +466,10 @@ sudo chown $USER:$USER /opt/lovable-app
 # Clone als huidige gebruiker
 git clone git@github.com:JOUW-USER/JOUW-REPO.git /opt/lovable-app
 
-# Start de installer
+# Controleer of install.sh aanwezig is
+ls install.sh
+
+# Start de installer (als install.sh gevonden is)
 cd /opt/lovable-app
 sudo bash install.sh
 
