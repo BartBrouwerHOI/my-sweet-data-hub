@@ -1096,7 +1096,9 @@ SITE_URL=\$api_url
 ENVEOF
   if [[ ! -f "\$APP_DIR/docker-compose.yml" ]]; then
     log_error "docker-compose.yml niet gevonden in \$APP_DIR"
-    log_error "Controleer of je repo dit bestand bevat."
+    echo "  Controleer of docker-compose.yml in de root van je repo staat."
+    echo "  Bestanden in \$APP_DIR:"
+    ls -la "\$APP_DIR/" 2>/dev/null || echo "  (map niet gevonden)"
     exit 1
   fi
   cp "\$APP_DIR/docker-compose.yml" "\$SUPABASE_DIR/docker-compose.yml"
