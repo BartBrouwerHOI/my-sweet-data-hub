@@ -487,7 +487,10 @@ docker ps
 # Test of de frontend reageert
 curl -I http://localhost:3000
 
-# Test de Supabase API (vervang JOUW_ANON_KEY)
+# Je Anon Key opzoeken (nodig voor de API-test hieronder):
+cat /opt/supabase/credentials.txt | grep "Anon Key"
+
+# Test de Supabase API (vervang JOUW_ANON_KEY met de key hierboven)
 curl http://localhost:8000/rest/v1/ -H "apikey: JOUW_ANON_KEY"`}</CodeBlock>
             <Location icon="browser" text="Browser op je eigen computer" />
             <CodeBlock fill={fill}>{`# Open deze adressen in je browser:
@@ -500,7 +503,10 @@ https://jouw-domein.nl:8080   → Supabase Studio (admin paneel)`}</CodeBlock>
             <CodeBlock fill={fill}>{`# Controleer of alle Supabase containers draaien
 docker ps
 
-# Test de API
+# Anon Key opzoeken:
+cat /opt/supabase/credentials.txt | grep "Anon Key"
+
+# Test de API (vervang JOUW_ANON_KEY)
 curl http://localhost:8000/rest/v1/ -H "apikey: JOUW_ANON_KEY"
 
 # Studio openen in browser: http://SERVER_A_IP:8080`}</CodeBlock>
@@ -542,13 +548,18 @@ lovable-update
 
 # Dit doet: git pull → docker build → restart container`}</CodeBlock>
             <Location icon="terminal" text="Terminal op Server A (alleen bij database-wijzigingen)" />
-            <CodeBlock fill={fill}>{`# Nieuwe migraties toepassen:
-cd /opt/lovable-app
-git pull
+            <CodeBlock fill={fill}>{`# Kopieer de nieuwste migraties van Server B naar Server A:
+# (draai dit op je EIGEN computer of via scp)
+scp root@JOUW-SERVER-IP:/opt/lovable-app/supabase/migrations/*.sql /tmp/
+scp /tmp/*.sql root@SERVER_A_IP:/tmp/migrations/
 
-# Migraties handmatig draaien:
-for f in supabase/migrations/*.sql; do
-  docker exec -i supabase-db psql -U supabase -d postgres < "$f"
+# Of clone de app-repo op Server A (eenmalig):
+git clone git@github.com:APP-USER/APP-REPO.git /opt/lovable-app
+
+# Migraties draaien (alleen nieuwe bestanden):
+for f in /opt/lovable-app/supabase/migrations/*.sql; do
+  echo "Migratie: $(basename $f)"
+  docker exec -i supabase-db psql -U supabase -d postgres --single-transaction < "$f"
 done`}</CodeBlock>
           </>
         )}
