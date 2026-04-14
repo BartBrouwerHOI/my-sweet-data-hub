@@ -12,15 +12,18 @@ services:
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: postgres
-      POSTGRES_USER: supabase
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXP: 3600
     volumes:
       - ./volumes/db/data:/var/lib/postgresql/data
-      - ./volumes/db/init:/docker-entrypoint-initdb.d
+      - ./volumes/db/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:ro
+      - ./volumes/db/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U supabase"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres -h localhost"]
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 30s
 
   # === Supabase Auth (GoTrue) ===
   auth:
@@ -191,5 +194,5 @@ services:
       PG_META_DB_HOST: db
       PG_META_DB_PORT: 5432
       PG_META_DB_NAME: postgres
-      PG_META_DB_USER: supabase
+      PG_META_DB_USER: supabase_admin
       PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
