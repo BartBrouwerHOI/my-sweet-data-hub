@@ -973,10 +973,28 @@ generate_secrets() {
 
 clone_app() {
   log_info "App clonen..."
-  if [[ -d "\$APP_DIR" ]]; then
+  if [[ -d "\$APP_DIR" && -f "\$APP_DIR/docker-compose.yml" ]]; then
     cd "\$APP_DIR" && git pull
   else
     read -p "GitHub repo URL (SSH): " GITHUB_REPO
+    log_info "SSH-verbinding met GitHub testen..."
+    if ! ssh -T -o ConnectTimeout=10 git@github.com 2>&1 | grep -q "successfully authenticated"; then
+      log_error "SSH-verbinding met GitHub mislukt!"
+      echo ""
+      echo "  Mogelijke oorzaken:"
+      echo "  1. Geen deploy key aangemaakt — voer uit:"
+      echo "     ssh-keygen -t ed25519 -C deploy@vps -f ~/.ssh/deploy_key -N \\\"\\\""
+      echo "  2. Deploy key niet toegevoegd aan GitHub repo → Settings → Deploy keys"
+      echo "  3. SSH config ontbreekt — maak ~/.ssh/config aan met:"
+      echo "     Host github.com"
+      echo "       IdentityFile ~/.ssh/deploy_key"
+      echo "       IdentitiesOnly yes"
+      echo ""
+      echo "  Test handmatig: ssh -T git@github.com"
+      echo ""
+      read -p "Wil je toch doorgaan met clonen? (j/n): " confirm
+      [[ "\$confirm" != "j" ]] && exit 1
+    fi
     git clone "\$GITHUB_REPO" "\$APP_DIR"
   fi
 }
@@ -1141,6 +1159,9 @@ main "\$@"`;
   return (
     <Warn>
       <strong>install.sh niet gevonden?</strong> Je repo is waarschijnlijk privé — de standaard <code className="rounded bg-muted px-1 text-xs">curl</code> download werkt dan niet.
+      <div className="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 text-yellow-200 text-xs">
+        <strong>⚠️ Let op:</strong> Ook als je install.sh handmatig aanmaakt, vraagt het script om je GitHub repo URL en kloont het via SSH. Zorg dat je de <strong>deploy key stap</strong> hierboven eerst hebt uitgevoerd!
+      </div>
       <ol className="list-inside list-decimal mt-2 space-y-2">
         <li>
           <strong>Check GitHub:</strong> Open je repo op github.com en kijk of <code className="rounded bg-muted px-1 text-xs">install.sh</code> in de root staat

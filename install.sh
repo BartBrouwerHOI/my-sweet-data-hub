@@ -192,11 +192,32 @@ generate_jwt() {
 # --- Clone app ---
 clone_app() {
   log_info "App clonen van GitHub..."
-  if [[ -d "$APP_DIR" ]]; then
+  if [[ -d "$APP_DIR" && -f "$APP_DIR/docker-compose.yml" ]]; then
     log_info "App directory bestaat al, git pull uitvoeren..."
     cd "$APP_DIR" && git pull
   else
     read -p "GitHub repo URL (SSH, bijv. git@github.com:user/repo.git): " GITHUB_REPO
+
+    # Test SSH-verbinding met GitHub vóór clone
+    log_info "SSH-verbinding met GitHub testen..."
+    if ! ssh -T -o ConnectTimeout=10 git@github.com 2>&1 | grep -q "successfully authenticated"; then
+      log_error "SSH-verbinding met GitHub mislukt!"
+      echo ""
+      echo "  Mogelijke oorzaken:"
+      echo "  1. Geen deploy key aangemaakt — voer uit:"
+      echo "     ssh-keygen -t ed25519 -C deploy@vps -f ~/.ssh/deploy_key -N \"\""
+      echo "  2. Deploy key niet toegevoegd aan GitHub repo → Settings → Deploy keys"
+      echo "  3. SSH config ontbreekt — maak ~/.ssh/config aan met:"
+      echo "     Host github.com"
+      echo "       IdentityFile ~/.ssh/deploy_key"
+      echo "       IdentitiesOnly yes"
+      echo ""
+      echo "  Test handmatig: ssh -T git@github.com"
+      echo ""
+      read -p "Wil je toch doorgaan met clonen? (j/n): " confirm
+      [[ "$confirm" != "j" ]] && exit 1
+    fi
+
     git clone "$GITHUB_REPO" "$APP_DIR"
   fi
 }
