@@ -1,98 +1,38 @@
 
-## Diagnose
 
-De kern is nu duidelijk:
+## Fix: `.app_env` altijd poort 8000 meegeven bij IP-gebaseerde installatie
 
-- jouw server draait **niet** `update.sh`
-- jouw commando gebruikt het gegenereerde bestand **`/usr/local/bin/lovable-update`**
-- dat script wordt opgebouwd vanuit **`install.sh` → `create_update_script()`**
-- in dat gegenereerde updater-script ontbreekt de nieuwe `patch_known_migrations()`-logica nog steeds
+### Probleem
+Bij installatie zonder domein wordt `APP_API_URL` opgeslagen als `http://IP` zonder `:8000`. De updater leest dit terug en overschrijft elke handmatige fix.
 
-Dat past exact bij je log:
-- je ziet `=== Lovable App Updater ===` → dat is het **gegenereerde updater-script**
-- je ziet **geen** regel zoals `Migratie-patch: ...` → de patchfunctie wordt daar helemaal niet aangeroepen
-- daardoor draait de originele kapotte migratie ongewijzigd en faalt hij opnieuw
+### Wijzigingen
 
-## Plan
+**`install.sh` — `build_frontend()` (regel 554, 560)**
 
-### 1. De echte fix in `install.sh` zetten
-Ik pas **`create_update_script()`** in `install.sh` aan, zodat het gegenereerde `/usr/local/bin/lovable-update` zelf ook:
+Waar de `api_url` wordt bepaald bij IP-gebaseerde installaties, `:8000` toevoegen:
 
-- `patch_known_migrations()` bevat
-- vóór de migratie-loop `patch_known_migrations` aanroept
-- dezelfde robuuste multiline-patch gebruikt als in `update.sh`
+- Regel 554: `api_url="http://$DB_SERVER_IP:8000"` → al correct (frontend-modus)
+- Regel 560: `api_url="http://$(curl -s ifconfig.me)"` → wijzigen naar `api_url="http://$(curl -s ifconfig.me):8000"`
 
-Belangrijkste doel:
-- niet alleen de fallback `update.sh` fixen
-- maar juist de **gegenereerde updater**, want die gebruik jij op de server
+Zo wordt de `:8000` ook in `.app_env` opgeslagen en overleeft hij updates.
 
-### 2. Beide relevante updater-varianten aanpassen
-Ik werk in `install.sh` de templates bij voor:
+**`update.sh` — `write_env_production()` fallback (regel 90-91)**
 
-- **database mode**
-- **full mode**
+Zelfde fix in de fallback: als er geen `.app_domain` is en de URL van `ifconfig.me` komt, `:8000` toevoegen:
 
-Daar zit de migratie-runner in.  
-`frontend mode` hoeft geen migratie-patch te krijgen.
+- Regel 91: `api_url="http://$(curl -sf ifconfig.me 2>/dev/null || echo localhost)"` → wijzigen naar `api_url="http://$(curl -sf ifconfig.me 2>/dev/null || echo localhost):8000"`
 
-### 3. Patch robuuster maken en verifiëren
-Ik maak de patch niet alleen multiline-safe, maar ook controleerbaar:
+**`install.sh` — gegenereerde updater-scripts (regels 996, 1082 (approx), 1147 (approx))**
 
-- eerst checken of targetbestand bestaat
-- checken of UUID aanwezig is
-- checken of `WHERE EXISTS` nog niet aanwezig is
-- patch toepassen
-- daarna **verifiëren dat de file echt gewijzigd is**
-- alleen dan `✅ toegepast` loggen
+Alle drie de plekken waar de gegenereerde `lovable-update` de fallback-URL bepaalt, `:8000` toevoegen aan de `ifconfig.me`-regel.
 
-Zo voorkomen we een vals succesbericht.
+### Geen wijziging nodig als domein is geconfigureerd
+Bij een domein met reverse proxy (Caddy/Nginx) proxyt poort 443 naar Kong 8000, dus daar is geen `:8000` nodig — die paden blijven ongewijzigd.
 
-### 4. Logging en foutmelding gelijk trekken
-Ik zorg dat zowel `install.sh` als het gegenereerde `lovable-update` duidelijk loggen:
+### Bestanden
 
-- doelbestand niet gevonden
-- al gepatcht
-- UUID niet gevonden
-- patch toegepast
-- patch geprobeerd maar patroon niet vervangen
+| Bestand | Wijziging |
+|---------|-----------|
+| `install.sh` | `:8000` toevoegen bij IP-gebaseerde URL in `build_frontend()` + alle gegenereerde updater-templates |
+| `update.sh` | `:8000` toevoegen bij IP-gebaseerde fallback in `write_env_production()` |
 
-En bij migratiefouten komt expliciet de herstelroute in beeld:
-
-```bash
-lovable-update --mark-done 20260119083612_fc4680d3-4321-408e-ac77-817040a08a81.sql
-```
-
-### 5. Direct herstelpad voor jouw server
-Na de codewijziging is de beoogde volgorde:
-
-```text
-git pull infra-repo
-sudo bash /opt/lovable-infra/install.sh --refresh-updater
-sudo lovable-update
-```
-
-Waarom deze extra stap:
-- jouw `lovable-update` moet eerst opnieuw gegenereerd worden uit de **nieuwe** `install.sh`
-- daarna pas bevat het command de patchlogica
-
-## Verwacht resultaat
-
-Na deze wijziging:
-
-- gebruikt het echte server-commando eindelijk dezelfde patchlogica
-- wordt de kapotte migratie vooraf on-the-fly aangepast
-- stopt een verse self-hosted installatie niet meer op `20260119083612...`
-- is in logs meteen zichtbaar of de patch echt is uitgevoerd
-
-## Technische details
-
-Het echte probleem zit dus niet meer alleen in de regex of multiline-match, maar vooral hier:
-
-```text
-install.sh
-└── create_update_script()
-    └── schrijft /usr/local/bin/lovable-update
-        └── daarin ontbrak de patch_known_migrations()-aanroep
-```
-
-`update.sh` als fallback was al dichter bij goed, maar jouw serverpad gebruikt het gegenereerde updater-script. Daarom werkte de eerdere fix in de praktijk nog niet.
