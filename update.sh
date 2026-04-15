@@ -141,6 +141,9 @@ run_strict_migrations() {
         echo "  De migratie '$local_name' is mislukt."
         echo "  Dit is waarschijnlijk een probleem in de app-repo, niet in de infra."
         echo "  Los het probleem op en draai daarna opnieuw: lovable-update"
+        echo ""
+        echo "  Workaround: als je zeker weet dat de migratie handmatig al is opgelost:"
+        echo "    lovable-update --mark-done $local_name"
         return 1
       fi
     fi
