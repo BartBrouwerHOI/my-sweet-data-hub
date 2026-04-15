@@ -1,69 +1,98 @@
 
 ## Diagnose
 
-De patch is al aanwezig in `install.sh` en `update.sh`, maar hij heeft niet gewerkt.
+De kern is nu duidelijk:
 
-Waarschijnlijk oorzaak:
-- de huidige check zoekt op `grep -q "VALUES ('fa761b51-"`, en/of
-- de huidige `sed`-replace verwacht dat de hele `INSERT ... VALUES ...` op één regel matcht.
+- jouw server draait **niet** `update.sh`
+- jouw commando gebruikt het gegenereerde bestand **`/usr/local/bin/lovable-update`**
+- dat script wordt opgebouwd vanuit **`install.sh` → `create_update_script()`**
+- in dat gegenereerde updater-script ontbreekt de nieuwe `patch_known_migrations()`-logica nog steeds
 
-Bij echte SQL-migraties staat zo’n statement vaak over meerdere regels. Dan triggert de patch niet. Dat past ook bij jouw log: de regel `Migratie-patch: conditionele super_admin INSERT` verschijnt nergens, dus de functie is wel aangeroepen maar heeft niets aangepast.
+Dat past exact bij je log:
+- je ziet `=== Lovable App Updater ===` → dat is het **gegenereerde updater-script**
+- je ziet **geen** regel zoals `Migratie-patch: ...` → de patchfunctie wordt daar helemaal niet aangeroepen
+- daardoor draait de originele kapotte migratie ongewijzigd en faalt hij opnieuw
 
 ## Plan
 
-### 1. Patchfunctie robuust maken in beide scripts
-Ik pas `patch_known_migrations()` aan in:
-- `install.sh`
-- `update.sh`
+### 1. De echte fix in `install.sh` zetten
+Ik pas **`create_update_script()`** in `install.sh` aan, zodat het gegenereerde `/usr/local/bin/lovable-update` zelf ook:
 
-Nieuwe aanpak:
-- niet meer zoeken op een fragiele `VALUES (`-substring
-- wel zoeken op:
-  - bestandsnaam van de bekende migratie
-  - aanwezigheid van de problematische UUID
-  - afwezigheid van `WHERE EXISTS` zodat de patch idempotent blijft
-- de SQL vervangen met een multiline-veilige aanpak in plaats van de huidige één-regelige `sed`
+- `patch_known_migrations()` bevat
+- vóór de migratie-loop `patch_known_migrations` aanroept
+- dezelfde robuuste multiline-patch gebruikt als in `update.sh`
 
-### 2. Multiline-safe replacement gebruiken
-In plaats van de huidige `sed`-regel gebruik ik een veiligere vervanging die ook werkt als de SQL over meerdere regels staat.
+Belangrijkste doel:
+- niet alleen de fallback `update.sh` fixen
+- maar juist de **gegenereerde updater**, want die gebruik jij op de server
 
-Doelvervanging:
+### 2. Beide relevante updater-varianten aanpassen
+Ik werk in `install.sh` de templates bij voor:
 
-```sql
-INSERT INTO user_roles (user_id, role)
-SELECT 'fa761b51-9489-4289-917b-d1818f3cd508', 'super_admin'::app_role
-WHERE EXISTS (
-  SELECT 1 FROM public.profiles
-  WHERE id = 'fa761b51-9489-4289-917b-d1818f3cd508'
-)
-ON CONFLICT (user_id, role) DO NOTHING;
+- **database mode**
+- **full mode**
+
+Daar zit de migratie-runner in.  
+`frontend mode` hoeft geen migratie-patch te krijgen.
+
+### 3. Patch robuuster maken en verifiëren
+Ik maak de patch niet alleen multiline-safe, maar ook controleerbaar:
+
+- eerst checken of targetbestand bestaat
+- checken of UUID aanwezig is
+- checken of `WHERE EXISTS` nog niet aanwezig is
+- patch toepassen
+- daarna **verifiëren dat de file echt gewijzigd is**
+- alleen dan `✅ toegepast` loggen
+
+Zo voorkomen we een vals succesbericht.
+
+### 4. Logging en foutmelding gelijk trekken
+Ik zorg dat zowel `install.sh` als het gegenereerde `lovable-update` duidelijk loggen:
+
+- doelbestand niet gevonden
+- al gepatcht
+- UUID niet gevonden
+- patch toegepast
+- patch geprobeerd maar patroon niet vervangen
+
+En bij migratiefouten komt expliciet de herstelroute in beeld:
+
+```bash
+lovable-update --mark-done 20260119083612_fc4680d3-4321-408e-ac77-817040a08a81.sql
 ```
 
-### 3. Logging verbeteren
-Ik laat de scripts duidelijk melden:
-- wanneer de patch wordt geprobeerd
-- wanneer de migratie al gepatcht is
-- wanneer de target-file wel bestaat maar het verwachte patroon niet matcht
+### 5. Direct herstelpad voor jouw server
+Na de codewijziging is de beoogde volgorde:
 
-Zo is in serverlogs meteen zichtbaar waarom het wel of niet werkte.
+```text
+git pull infra-repo
+sudo bash /opt/lovable-infra/install.sh --refresh-updater
+sudo lovable-update
+```
 
-### 4. Foutmelding uitbreiden met workaround
-Bij mislukte migraties voeg ik expliciet deze herstelroute toe in `update.sh`:
-- `lovable-update --mark-done <bestandsnaam>`
-
-Dat lost de hoofdoorzaak niet op, maar maakt herstel veel duidelijker als iemand al in deze situatie zit.
+Waarom deze extra stap:
+- jouw `lovable-update` moet eerst opnieuw gegenereerd worden uit de **nieuwe** `install.sh`
+- daarna pas bevat het command de patchlogica
 
 ## Verwacht resultaat
 
 Na deze wijziging:
-- werkt de on-the-fly patch ook als de SQL multiline is
+
+- gebruikt het echte server-commando eindelijk dezelfde patchlogica
+- wordt de kapotte migratie vooraf on-the-fly aangepast
 - stopt een verse self-hosted installatie niet meer op `20260119083612...`
-- zijn bestaande installaties niet geraakt
-- is het debuggen van toekomstige migratieproblemen eenvoudiger
+- is in logs meteen zichtbaar of de patch echt is uitgevoerd
 
-## Technische notitie
+## Technische details
 
-De kernfout zit dus niet meer in het idee van de patch, maar in de implementatie van de match:
-- huidige patroon is te strikt
-- `sed` met `.*` werkt hier niet betrouwbaar over meerdere regels
-- daarom moet de patchfunctie inhoudelijk slimmer en multiline-bestendig worden
+Het echte probleem zit dus niet meer alleen in de regex of multiline-match, maar vooral hier:
+
+```text
+install.sh
+└── create_update_script()
+    └── schrijft /usr/local/bin/lovable-update
+        └── daarin ontbrak de patch_known_migrations()-aanroep
+```
+
+`update.sh` als fallback was al dichter bij goed, maar jouw serverpad gebruikt het gegenereerde updater-script. Daarom werkte de eerdere fix in de praktijk nog niet.
