@@ -382,7 +382,7 @@ setup_supabase() {
   if [[ -n "$DOMAIN" ]]; then
     api_url="${PROTOCOL}://$DOMAIN"
   else
-    api_url="http://$(curl -s ifconfig.me)"
+    api_url="http://$(curl -s ifconfig.me):8000"
   fi
 
   cat > "$SUPABASE_DIR/.env" <<ENVEOF
@@ -557,7 +557,7 @@ build_frontend() {
     if [[ -n "$DOMAIN" ]]; then
       api_url="${PROTOCOL}://$DOMAIN"
     else
-      api_url="http://$(curl -s ifconfig.me)"
+      api_url="http://$(curl -s ifconfig.me):8000"
     fi
     anon_key="$ANON_KEY"
   fi
@@ -993,7 +993,7 @@ elif [[ -f "\$SUPABASE_DIR/.env" ]]; then
   if [[ -f "\$INFRA_DIR/.app_domain" ]]; then
     _api_url="https://\$(cat "\$INFRA_DIR/.app_domain")"
   else
-    _api_url="http://\$(curl -sf ifconfig.me 2>/dev/null || echo localhost)"
+    _api_url="http://\$(curl -sf ifconfig.me 2>/dev/null || echo localhost):8000"
   fi
 fi
 if [[ -n "\$_api_url" && -n "\$_anon_key" ]]; then
@@ -1080,7 +1080,7 @@ if [[ "\$APP_ONLY" == true ]]; then
     if [[ -f "\$INFRA_DIR/.app_domain" ]]; then
       _api_url="https://\$(cat "\$INFRA_DIR/.app_domain")"
     else
-      _api_url="http://\$(curl -sf ifconfig.me 2>/dev/null || echo localhost)"
+      _api_url="http://\$(curl -sf ifconfig.me 2>/dev/null || echo localhost):8000"
     fi
   fi
   if [[ -n "\$_api_url" && -n "\$_anon_key" ]]; then
@@ -1146,7 +1146,7 @@ elif [[ -f "\$SUPABASE_DIR/.env" ]]; then
   if [[ -f "\$INFRA_DIR/.app_domain" ]]; then
     _api_url="https://\$(cat "\$INFRA_DIR/.app_domain")"
   else
-    _api_url="http://\$(curl -sf ifconfig.me 2>/dev/null || echo localhost)"
+    _api_url="http://\$(curl -sf ifconfig.me 2>/dev/null || echo localhost):8000"
   fi
 fi
 if [[ -n "\$_api_url" && -n "\$_anon_key" ]]; then
@@ -1243,7 +1243,7 @@ print_summary() {
   if [[ -n "$DOMAIN" ]]; then
     url="${PROTOCOL}://$DOMAIN"
   else
-    url="http://$(curl -s ifconfig.me)"
+    url="http://$(curl -s ifconfig.me):8000"
   fi
 
   echo ""
