@@ -555,7 +555,7 @@ curl -I http://localhost:3000`}</CodeBlock>
         {mode === "single" ? (
           <>
             <Location icon="terminal" text="Terminal op je VM" />
-            <CodeBlock fill={fill}>{`# Eén commando om alles te updaten:
+            <CodeBlock fill={fill}>{`# Volledige update (infra + app + migraties):
 sudo lovable-update
 
 # Dit doet:
@@ -564,6 +564,17 @@ sudo lovable-update
 # 3. Rebuild frontend met juiste Dockerfile (SPA of SSR)
 # 4. Restart container
 # 5. Database migraties draaien`}</CodeBlock>
+            <CodeBlock fill={fill}>{`# Snelle app-only update (alleen app rebuilden, geen infra pull):
+sudo lovable-update --app-only
+
+# Dit doet:
+# 1. git pull in /opt/lovable-app
+# 2. Rebuild frontend
+# 3. Restart container
+# (geen infra-update, geen migraties)`}</CodeBlock>
+            <CodeBlock fill={fill}>{`# Volledige update maar migraties overslaan:
+sudo lovable-update --skip-migrations`}</CodeBlock>
+            <Tip>Gebruik <CopyCode fill={fill}>--app-only</CopyCode> als je alleen je Lovable app hebt aangepast en geen infra-wijzigingen of nieuwe database-migraties hebt. Dat is sneller en veiliger.</Tip>
           </>
         ) : (
           <>
@@ -571,12 +582,14 @@ sudo lovable-update
             <CodeBlock fill={fill}>{`# Update de frontend:
 sudo lovable-update
 
-# Dit doet: git pull → docker build → restart container`}</CodeBlock>
+# Snelle app-only update (zonder infra pull):
+sudo lovable-update --app-only`}</CodeBlock>
             <Location icon="terminal" text="Terminal op Server A (alleen bij database-wijzigingen)" />
             <CodeBlock fill={fill}>{`# Update de backend (incl. migraties):
 sudo lovable-update
 
-# Dit doet: git pull (infra + app) → nieuwe migraties draaien → Supabase herstarten`}</CodeBlock>
+# Migraties overslaan:
+sudo lovable-update --skip-migrations`}</CodeBlock>
             <Tip>Als je bij de installatie van Server A hebt gekozen om de app-repo te clonen voor migraties, wordt deze automatisch mee-geüpdatet door <CopyCode fill={fill}>lovable-update</CopyCode>.</Tip>
           </>
         )}

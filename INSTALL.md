@@ -48,10 +48,21 @@ Het script vraagt om:
 ## Updates
 
 ```bash
+# Volledige update (infra + app + migraties):
 lovable-update
+
+# Snelle app-only update (alleen app rebuilden):
+lovable-update --app-only
+
+# Volledige update zonder migraties:
+lovable-update --skip-migrations
 ```
 
-Dit haalt updates op voor zowel de infra-repo als de app-repo, herbouwt de frontend en draait nieuwe migraties (reeds gedraaide migraties worden overgeslagen).
+| Commando | Wat het doet |
+|----------|-------------|
+| `lovable-update` | Haalt infra + app op, herbouwt frontend, draait migraties |
+| `lovable-update --app-only` | Alleen app-repo pullen + frontend rebuilden (geen infra, geen migraties) |
+| `lovable-update --skip-migrations` | Volledige update maar slaat database migraties over |
 
 ## Interactieve Handleiding
 
