@@ -69,14 +69,32 @@ fi
 
 # --- .env.production herschrijven met self-hosted waarden ---
 write_env_production() {
+  local api_url=""
+  local anon_key=""
+
   if [[ -f "$INFRA_DIR/.app_env" ]]; then
     source "$INFRA_DIR/.app_env"
+    api_url="$APP_API_URL"
+    anon_key="$APP_ANON_KEY"
+  elif [[ -f "$SUPABASE_DIR/.env" ]]; then
+    # Fallback: lees direct uit Supabase .env
+    anon_key=$(grep "^ANON_KEY=" "$SUPABASE_DIR/.env" | cut -d= -f2-)
+    if [[ -f "$INFRA_DIR/.app_domain" ]]; then
+      api_url="https://$(cat "$INFRA_DIR/.app_domain")"
+    else
+      api_url="http://$(curl -sf ifconfig.me 2>/dev/null || echo localhost)"
+    fi
+  fi
+
+  if [[ -n "$api_url" && -n "$anon_key" ]]; then
     cat > "$APP_DIR/.env.production" <<_ENVEOF
-VITE_SUPABASE_URL=$APP_API_URL
-VITE_SUPABASE_ANON_KEY=$APP_ANON_KEY
-VITE_SUPABASE_PUBLISHABLE_KEY=$APP_ANON_KEY
+VITE_SUPABASE_URL=$api_url
+VITE_SUPABASE_ANON_KEY=$anon_key
+VITE_SUPABASE_PUBLISHABLE_KEY=$anon_key
 _ENVEOF
-    echo "  .env.production bijgewerkt"
+    echo -e "  ${GREEN}.env.production → $api_url${NC}"
+  else
+    echo -e "  ${YELLOW}⚠️  Kan .env.production niet schrijven — .app_env en supabase/.env ontbreken${NC}"
   fi
 }
 

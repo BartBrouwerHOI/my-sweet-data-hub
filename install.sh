@@ -556,6 +556,11 @@ APP_ANON_KEY=$anon_key
 APPENVEOF
   chmod 600 "$INFRA_DIR/.app_env"
 
+  # Bewaar domein apart voor fallback in update-script
+  if [[ -n "$DOMAIN" ]]; then
+    echo "$DOMAIN" > "$INFRA_DIR/.app_domain"
+  fi
+
   # Selecteer het juiste Dockerfile en kopieer nginx config indien SPA
   local dockerfile
   if [[ "$PROJECT_TYPE" == "spa" ]]; then
