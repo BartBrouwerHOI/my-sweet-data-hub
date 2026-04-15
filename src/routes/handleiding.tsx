@@ -242,7 +242,7 @@ function HandleidingPage() {
           )}
           <li><strong><InfoTooltip text="Veilige verbinding met je server op afstand, zoals remote desktop maar dan via tekst." />-toegang</strong> tot de VM{mode === "split" ? "'s" : ""}</li>
           <li><strong>Privé GitHub repo</strong> met je Lovable project (te vinden op <a href="https://github.com" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">github.com</a>)</li>
-          <li><strong>Domeinnaam</strong> (optioneel, kan ook op IP)</li>
+          <li><strong>Domeinnaam</strong> (optioneel, kan ook op IP — maar dan geen SSL)</li>
         </ul>
         {mode === "split" && (
           <Tip>Zorg dat beide VM's elkaar kunnen bereiken via het interne Proxmox netwerk (vmbr0). Noteer de IP-adressen van beide servers.</Tip>
@@ -415,7 +415,7 @@ sudo git clone INFRA-REPO-URL /opt/lovable-infra`}</CodeBlock>
           <p>Het script vraagt om:</p>
           <ul className="list-inside list-disc space-y-1">
             <li><strong>Installatiemodus</strong> — kies <CopyCode fill={fill}>1) Volledige installatie</CopyCode></li>
-            <li><strong>Domeinnaam</strong> — bijv. <CopyCode fill={fill}>jouw-domein.nl</CopyCode> of laat leeg voor IP</li>
+            <li><strong>Domeinnaam</strong> — bijv. <CopyCode fill={fill}>jouw-domein.nl</CopyCode> of laat leeg voor IP (geen SSL bij IP)</li>
             <li><strong>Admin e-mail</strong> — voor het <InfoTooltip text="Versleutelde verbinding (https) zodat data veilig verstuurd wordt. Let's Encrypt geeft gratis SSL-certificaten uit." /> certificaat</li>
             <li><strong>Database wachtwoord</strong> — kies iets sterks, je hebt dit later nodig</li>
             <li><strong>Dashboard wachtwoord</strong> — voor Supabase Studio (admin paneel)</li>
@@ -426,6 +426,10 @@ sudo git clone INFRA-REPO-URL /opt/lovable-infra`}</CodeBlock>
             Het script detecteert automatisch of je app een <strong>SPA</strong> (Vite + React) of <strong>SSR</strong> (TanStack Start) project is 
             en kiest het juiste Dockerfile. Je hoeft hier niets voor te configureren.
           </Tip>
+          <Warn>
+            <strong>Domeinnaam vs IP:</strong> Vul je een IP-adres in bij "Domeinnaam", dan schakelt het script automatisch over naar HTTP (geen SSL). 
+            Let's Encrypt kan geen certificaten uitgeven voor IP-adressen. Gebruik een echte domeinnaam voor HTTPS.
+          </Warn>
 
           <p className="mt-2">Het script doet de rest: het detecteert automatisch of je {distro === "debian" ? "Ubuntu/Debian" : "CentOS/AlmaLinux/Rocky"} draait en installeert de juiste packages ({distro === "debian" ? "apt" : "dnf"}), <InfoTooltip text="Software die in een afgesloten 'doos' draait, zodat het overal hetzelfde werkt — ongeacht het besturingssysteem." />, secrets genereren, containers starten, <InfoTooltip text="Webserver die bezoekers doorstuurt naar de juiste service (reverse proxy)." /> + SSL en firewall ({distro === "debian" ? "UFW" : "firewalld"}).</p>
           <Warn>Het script zet <CopyCode fill={fill}>GOTRUE_MAILER_AUTOCONFIRM: true</CopyCode>. Dit bevestigt e-mailadressen automatisch zonder verificatie-email. Voor productie: stel <InfoTooltip text="Protocol voor het versturen van e-mails — nodig voor verificatie-mails en wachtwoord-reset." /> in (stap {steps.findIndex(s => s.id === "smtp-oauth") + 1}) en zet dit op <CopyCode fill={fill}>false</CopyCode>.</Warn>
@@ -676,8 +680,8 @@ cd /opt/supabase && sudo docker compose restart auth`}</CodeBlock>
         <div className="space-y-4">
           <TroubleItem q="Container start niet op" a={`Check logs: sudo docker logs supabase-db (of andere containernaam). Vaak een verkeerd wachtwoord of poort-conflict.`} />
           <TroubleItem q="Frontend laadt niet" a="Check of de container draait: sudo docker ps. Test lokaal: curl http://localhost:3000. Check Nginx config: sudo nginx -t" />
-          <TroubleItem q="SSL werkt niet" a={distro === "debian" ? "Controleer of poort 80 en 443 open staan in Proxmox firewall én UFW. Draai opnieuw: sudo certbot --nginx -d jouw-domein.nl" : "Controleer of poort 80 en 443 open staan in Proxmox firewall én firewalld (sudo firewall-cmd --list-all). Draai opnieuw: sudo certbot --nginx -d jouw-domein.nl"} />
-          <TroubleItem q="Database connectie mislukt" a={`Check of PostgreSQL draait: sudo docker exec supabase-db pg_isready -U supabase.${mode === "split" ? " Bij split: check of poort 8000 open staat op Server A met: curl http://SERVER_A_IP:8000/rest/v1/" : ""}`} />
+          <TroubleItem q="SSL werkt niet / Let's Encrypt mislukt" a={`Let's Encrypt werkt alleen met een echte domeinnaam, niet met een IP-adres. Als je een IP hebt ingevuld, werkt de app via http:// (zonder SSL). Wil je SSL? Koppel een domeinnaam aan je server en draai: sudo certbot --nginx -d jouw-domein.nl`} />
+          <TroubleItem q="Database connectie mislukt" a={`Check of PostgreSQL draait: sudo docker exec supabase-db pg_isready -U postgres.${mode === "split" ? " Bij split: check of poort 8000 open staat op Server A met: curl http://SERVER_A_IP:8000/rest/v1/" : ""}`} />
           <TroubleItem q="Git pull mislukt" a="Check deploy key: ssh -T git@github.com. Controleer ~/.ssh/config. Zorg dat de deploy key op GitHub staat." />
           <TroubleItem q="Supabase API geeft 401" a="Controleer of ANON_KEY in .env.production (frontend) overeenkomt met de key in /opt/supabase/.env (backend). Deze moeten exact gelijk zijn." />
           {mode === "split" && (
@@ -688,37 +692,21 @@ cd /opt/supabase && sudo docker compose restart auth`}</CodeBlock>
           <TroubleItem q="'getcwd: cannot access parent directories'" a="Je staat in een map die net verwijderd is. Typ eerst: cd ~ om naar een bestaande map te gaan, en probeer dan opnieuw." />
           <TroubleItem q="'bash: install.sh: No such file or directory'" a="Je staat niet in de juiste map, of de map is verwijderd. Gebruik altijd het volledige pad: sudo bash /opt/lovable-infra/install.sh" />
           <TroubleItem q="SSH werkt als gebruiker maar niet met sudo" a="sudo draait als root en gebruikt /root/.ssh/. Kopieer je key: sudo cp ~/.ssh/deploy_key /root/.ssh/deploy_key && sudo cp ~/.ssh/config /root/.ssh/config. Test daarna: sudo ssh -T git@github.com" />
+          <TroubleItem q="Migratie mislukt met foreign key fout" a="Dit komt vaak door hardcoded seed-data (test-gebruikers) in je app-migraties die niet bestaan in een schone database. Fix de migratie in je app-repo door de INSERT conditioneel te maken (WHERE EXISTS ...) of de seed-data te verwijderen. Push naar GitHub en draai: lovable-update" />
+          <TroubleItem q="'⚠️ INSTALLATIE DEELS VOLTOOID'" a="De infrastructuur draait prima, maar een app-migratie is mislukt. Dit is geen infra-probleem — de fix moet in je app-repo. Zie de foutmelding voor details. Na de fix: push naar GitHub en draai lovable-update." />
           <TroubleItem q="Auth/Storage/Realtime containers crashen (schema 'auth' does not exist / role 'anon' does not exist)" a="De database mist de Supabase rollen en schema's. Dit gebeurt als de data directory al bestond bij eerste start. Oplossing: stop alles, verwijder de data directory en start opnieuw:" />
           <CodeBlock fill={fill} title="Database resetten (volledige reset)">{`cd /opt/supabase && sudo docker compose down
 sudo rm -rf /opt/supabase/volumes/db/data
+sudo rm -rf /opt/supabase/.migrations_done
 sudo docker compose up -d`}</CodeBlock>
           <p className="mt-2 text-sm text-muted-foreground">⚠️ Dit wist alle database-data. Maak eerst een backup als je data wilt behouden.</p>
 
-          <TroubleItem q="Init script handmatig draaien (zonder data te wissen)" a="Als de rollen ontbreken maar je data wilt behouden, kun je het init script handmatig uitvoeren. Gebruik altijd -h localhost om via TCP te verbinden (peer auth werkt niet):" />
-          <CodeBlock fill={fill} title="Init script handmatig uitvoeren">{`# Controleer welke rollen bestaan
-sudo docker exec supabase-db bash -c 'PGPASSWORD=$POSTGRES_PASSWORD psql -U supabase -d postgres -h localhost -c "SELECT rolname FROM pg_roles WHERE rolname IN ('"'"'anon'"'"','"'"'authenticated'"'"','"'"'authenticator'"'"','"'"'service_role'"'"') ORDER BY rolname;"'
-
-# Draai het init script handmatig
-sudo docker exec -i supabase-db bash -c 'PGPASSWORD=$POSTGRES_PASSWORD psql -U supabase -d postgres -h localhost' < /opt/supabase/volumes/db/init/00-supabase-init.sql
-
-# Herstart alle services
-cd /opt/supabase && sudo docker compose restart`}</CodeBlock>
-
-          <TroubleItem q="'Peer authentication failed for user supabase'" a="Je gebruikt psql zonder -h localhost. Voeg altijd -h localhost toe om via TCP (password auth) te verbinden in plaats van Unix sockets (peer auth). Gebruik ook PGPASSWORD:" />
+          <TroubleItem q="'Peer authentication failed for user postgres'" a="Je gebruikt psql zonder -h localhost. Voeg altijd -h localhost toe om via TCP (password auth) te verbinden in plaats van Unix sockets (peer auth). Gebruik ook PGPASSWORD:" />
           <CodeBlock fill={fill} title="Correct psql commando">{`# Fout:
-sudo docker exec supabase-db psql -U supabase -d postgres -c "..."
+sudo docker exec supabase-db psql -U postgres -d postgres -c "..."
 
 # Goed:
-sudo docker exec supabase-db bash -c 'PGPASSWORD=$POSTGRES_PASSWORD psql -U supabase -d postgres -h localhost -c "..."'`}</CodeBlock>
-
-          <TroubleItem q="'ERROR: role supabase_admin does not exist' bij init script" a="Dit komt doordat de supabase user niet genoeg rechten heeft voor REPLICATION/BYPASSRLS. Update je infra-repo (git pull) voor de gefixte versie van het init script, of maak de rol handmatig aan:" />
-          <CodeBlock fill={fill} title="supabase_admin handmatig aanmaken">{`sudo docker exec -i supabase-db bash -c 'PGPASSWORD=$POSTGRES_PASSWORD psql -U supabase -d postgres -h localhost' <<'SQL'
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'supabase_admin') THEN
-    CREATE ROLE supabase_admin LOGIN CREATEROLE CREATEDB;
-  END IF;
-END $$;
-SQL`}</CodeBlock>
+sudo docker exec supabase-db bash -c 'PGPASSWORD=$POSTGRES_PASSWORD psql -U postgres -d postgres -h localhost -c "..."'`}</CodeBlock>
         </div>
       </Step>
 
