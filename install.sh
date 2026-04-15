@@ -586,9 +586,11 @@ APP_ANON_KEY=$anon_key
 APPENVEOF
   chmod 600 "$INFRA_DIR/.app_env"
 
-  # Bewaar domein apart voor fallback in update-script
-  if [[ -n "$DOMAIN" ]]; then
+  # Bewaar domein apart voor fallback in update-script (alleen echte domeinnamen, geen IP's)
+  if [[ -n "$DOMAIN" && ! "$DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     echo "$DOMAIN" > "$INFRA_DIR/.app_domain"
+  else
+    rm -f "$INFRA_DIR/.app_domain"
   fi
 
   # Selecteer het juiste Dockerfile en kopieer nginx config indien SPA
