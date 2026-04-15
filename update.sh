@@ -185,6 +185,7 @@ if [[ "$INSTALL_MODE" == "database" ]]; then
     echo -e "${GREEN}[3/4]${NC} Database migraties overgeslagen (--skip-migrations)"
   else
     echo -e "${GREEN}[3/4]${NC} Database migraties controleren..."
+    patch_known_migrations
     run_strict_migrations || exit 1
   fi
 
@@ -317,6 +318,7 @@ if [[ "$SKIP_MIGRATIONS" == true ]]; then
   echo -e "${GREEN}[5/5]${NC} Database migraties overgeslagen (--skip-migrations)"
 else
   echo -e "${GREEN}[5/5]${NC} Database migraties controleren..."
+  patch_known_migrations
   run_strict_migrations || exit 1
 fi
 

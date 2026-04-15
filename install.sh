@@ -1299,6 +1299,7 @@ main() {
       setup_supabase
       build_frontend
       start_supabase
+      patch_known_migrations
       if ! run_migrations; then
         migration_failed=true
       fi
@@ -1308,6 +1309,7 @@ main() {
       generate_secrets
       setup_supabase
       start_supabase
+      patch_known_migrations
       if ! run_migrations; then
         migration_failed=true
       fi
