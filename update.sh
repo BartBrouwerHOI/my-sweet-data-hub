@@ -18,8 +18,17 @@ BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-# Probeer eerst het geregistreerde commando
-if command -v lovable-update &>/dev/null; then
+# Probeer eerst het geregistreerde commando — maar NIET bij --mark-done
+# (het bestaande script op de server kan verouderd zijn en --mark-done niet kennen)
+USES_LOCAL_FALLBACK=false
+for _arg in "$@"; do
+  if [[ "$_arg" == "--mark-done" ]]; then
+    USES_LOCAL_FALLBACK=true
+    break
+  fi
+done
+
+if [[ "$USES_LOCAL_FALLBACK" == false ]] && command -v lovable-update &>/dev/null; then
   echo -e "${BLUE}lovable-update gevonden, doorverwijzen...${NC}"
   exec lovable-update "$@"
 fi
@@ -44,6 +53,12 @@ for arg in "$@"; do
   esac
 done
 
+# Detecteer paden (MOET vóór mark-done staan)
+INFRA_DIR="${INFRA_DIR:-/opt/lovable-infra}"
+APP_DIR="${APP_DIR:-/opt/lovable-app}"
+SUPABASE_DIR="${SUPABASE_DIR:-/opt/supabase}"
+MIGRATIONS_DONE_DIR="$SUPABASE_DIR/.migrations_done"
+
 # --- Mark-done shortcut ---
 if [[ -n "$MARK_DONE" && "$MARK_DONE" != "next" ]]; then
   mkdir -p "$MIGRATIONS_DONE_DIR"
@@ -51,12 +66,6 @@ if [[ -n "$MARK_DONE" && "$MARK_DONE" != "next" ]]; then
   echo -e "${GREEN}✅ Migratie '$MARK_DONE' gemarkeerd als gedaan.${NC}"
   exit 0
 fi
-
-# Detecteer paden
-INFRA_DIR="${INFRA_DIR:-/opt/lovable-infra}"
-APP_DIR="${APP_DIR:-/opt/lovable-app}"
-SUPABASE_DIR="${SUPABASE_DIR:-/opt/supabase}"
-MIGRATIONS_DONE_DIR="$SUPABASE_DIR/.migrations_done"
 
 # --- Strikte migratie-runner (gedeeld) ---
 run_strict_migrations() {

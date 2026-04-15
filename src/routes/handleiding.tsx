@@ -574,6 +574,17 @@ sudo lovable-update --app-only
 # (geen infra-update, geen migraties)`}</CodeBlock>
             <CodeBlock fill={fill}>{`# Volledige update maar migraties overslaan:
 sudo lovable-update --skip-migrations`}</CodeBlock>
+            <CodeBlock fill={fill}>{`# Vastlopende migratie overslaan:
+sudo lovable-update --mark-done <migratiebestand.sql>`}</CodeBlock>
+            <Warn>
+              <strong>Nieuw commando werkt niet?</strong> Het <CopyCode fill={fill}>lovable-update</CopyCode> commando op je server is een gegenereerd script.
+              Na een infra-update wordt het automatisch vernieuwd, maar als je van een oudere versie komt kan het nodig zijn om het handmatig te vernieuwen:
+            </Warn>
+            <CodeBlock fill={fill}>{`# Updater handmatig vernieuwen (eenmalig, na grote infra-update):
+sudo bash /opt/lovable-infra/install.sh --refresh-updater
+
+# Daarna werken nieuwe flags zoals --mark-done:
+sudo lovable-update --mark-done <migratiebestand.sql>`}</CodeBlock>
             <Tip>Gebruik <CopyCode fill={fill}>--app-only</CopyCode> als je alleen je Lovable app hebt aangepast en geen infra-wijzigingen of nieuwe database-migraties hebt. Dat is sneller en veiliger.</Tip>
           </>
         ) : (
