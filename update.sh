@@ -189,6 +189,7 @@ if [[ "$INSTALL_MODE" == "frontend" ]]; then
     cd "$APP_DIR" && git pull
   fi
 
+  write_env_production
   if [[ "$PROJECT_TYPE" == "spa" ]]; then
     cp "$INFRA_DIR/nginx/frontend-spa.conf" "$APP_DIR/nginx.conf"
     docker build -t lovable-frontend -f "$INFRA_DIR/Dockerfile.spa" "$APP_DIR"
