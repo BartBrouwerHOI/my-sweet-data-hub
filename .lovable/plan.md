@@ -1,38 +1,52 @@
 
 
-## Fix: `.app_env` altijd poort 8000 meegeven bij IP-gebaseerde installatie
+## Fix: Dubbele poort voorkomen + firewall regel voor full-modus
 
 ### Probleem
-Bij installatie zonder domein wordt `APP_API_URL` opgeslagen als `http://IP` zonder `:8000`. De updater leest dit terug en overschrijft elke handmatige fix.
+1. **Dubbele `:8000`**: Als `.app_env` al `:8000` bevat en de updater/installer opnieuw `:8000` toevoegt, krijg je `http://IP:8000:8000`.
+2. **Firewall**: Poort 8000 wordt alleen geopend in `database`-modus, maar in `full`-modus zonder domein (IP-gebaseerd) moet de browser ook direct Kong bereiken op poort 8000.
 
 ### Wijzigingen
 
-**`install.sh` — `build_frontend()` (regel 554, 560)**
+**`install.sh` — nieuwe helper `ensure_kong_port()`** (bij de andere helpers bovenin):
+```bash
+ensure_kong_port() {
+  local url="$1"
+  if [[ "$url" =~ ://[^/]*:[0-9]+ ]]; then
+    echo "$url"
+  else
+    echo "${url%/}:8000"
+  fi
+}
+```
+Gebruik in `build_frontend()` regels 554 en 560:
+- `api_url="$(ensure_kong_port "http://$DB_SERVER_IP")"`
+- `api_url="$(ensure_kong_port "http://$(curl -s ifconfig.me)")"`
 
-Waar de `api_url` wordt bepaald bij IP-gebaseerde installaties, `:8000` toevoegen:
+**`install.sh` — `configure_firewall()` (regel 832-852)**:
+Poort 8000 ook openen in `full`-modus wanneer er geen domein is (IP-gebaseerde installatie). Wijzig de `if`-conditie van alleen `database` naar `database` OF (`full` zonder domein):
+```bash
+if [[ "$INSTALL_MODE" == "database" ]] || { [[ "$INSTALL_MODE" == "full" ]] && [[ -z "$DOMAIN" || "$IS_IP_ADDRESS" == true ]]; }; then
+```
 
-- Regel 554: `api_url="http://$DB_SERVER_IP:8000"` → al correct (frontend-modus)
-- Regel 560: `api_url="http://$(curl -s ifconfig.me)"` → wijzigen naar `api_url="http://$(curl -s ifconfig.me):8000"`
+**`install.sh` — gegenereerde updater-templates (regels 996, 1083, 1149)**:
+Inline poort-check toevoegen zodat dubbele `:8000` niet kan:
+```bash
+_api_url="http://$(curl -sf ifconfig.me 2>/dev/null || echo localhost)"
+[[ ! "$_api_url" =~ :[0-9]+$ ]] && _api_url="${_api_url}:8000"
+```
 
-Zo wordt de `:8000` ook in `.app_env` opgeslagen en overleeft hij updates.
-
-**`update.sh` — `write_env_production()` fallback (regel 90-91)**
-
-Zelfde fix in de fallback: als er geen `.app_domain` is en de URL van `ifconfig.me` komt, `:8000` toevoegen:
-
-- Regel 91: `api_url="http://$(curl -sf ifconfig.me 2>/dev/null || echo localhost)"` → wijzigen naar `api_url="http://$(curl -sf ifconfig.me 2>/dev/null || echo localhost):8000"`
-
-**`install.sh` — gegenereerde updater-scripts (regels 996, 1082 (approx), 1147 (approx))**
-
-Alle drie de plekken waar de gegenereerde `lovable-update` de fallback-URL bepaalt, `:8000` toevoegen aan de `ifconfig.me`-regel.
-
-### Geen wijziging nodig als domein is geconfigureerd
-Bij een domein met reverse proxy (Caddy/Nginx) proxyt poort 443 naar Kong 8000, dus daar is geen `:8000` nodig — die paden blijven ongewijzigd.
+**`update.sh` — `write_env_production()` fallback (regel 85)**:
+Zelfde inline check toevoegen:
+```bash
+api_url="http://$(curl -sf ifconfig.me 2>/dev/null || echo localhost)"
+[[ ! "$api_url" =~ :[0-9]+$ ]] && api_url="${api_url}:8000"
+```
 
 ### Bestanden
 
 | Bestand | Wijziging |
 |---------|-----------|
-| `install.sh` | `:8000` toevoegen bij IP-gebaseerde URL in `build_frontend()` + alle gegenereerde updater-templates |
-| `update.sh` | `:8000` toevoegen bij IP-gebaseerde fallback in `write_env_production()` |
+| `install.sh` | `ensure_kong_port()` helper + gebruik in `build_frontend()` + poort 8000 firewall in full-modus zonder domein + inline check in gegenereerde updater-templates |
+| `update.sh` | Inline poort-check in `write_env_production()` fallback |
 
