@@ -863,6 +863,9 @@ echo ""
 echo "[1/4] Infra-repo updaten..."
 cd "\$INFRA_DIR" && git pull
 
+# Updater zelf vernieuwen na infra pull
+bash "\$INFRA_DIR/install.sh" --refresh-updater 2>/dev/null || true
+
 echo "[2/4] App-repo updaten (voor migraties)..."
 if [[ -d "\$APP_DIR/.git" ]]; then
   cd "\$APP_DIR" && git pull
@@ -1006,6 +1009,9 @@ echo ""
 echo "[1/5] Infra-repo updaten..."
 cd "\$INFRA_DIR" && git pull
 
+# Updater zelf vernieuwen na infra pull
+bash "\$INFRA_DIR/install.sh" --refresh-updater 2>/dev/null || true
+
   # roles.sql en jwt.sql bijwerken vanuit infra-repo
   if [[ -d "\$SUPABASE_DIR/volumes/db" ]]; then
     cp "\$INFRA_DIR/volumes/db/roles.sql" "\$SUPABASE_DIR/volumes/db/roles.sql" 2>/dev/null || true
@@ -1130,8 +1136,43 @@ print_summary() {
   echo ""
 }
 
+# --- Refresh updater (re-generate /usr/local/bin/lovable-update from current config) ---
+refresh_updater() {
+  if [[ ! -f "$INFRA_DIR/.install_mode" ]]; then
+    log_error "Kan installatiemodus niet detecteren — .install_mode ontbreekt."
+    echo "  Draai eerst een volledige installatie met install.sh."
+    exit 1
+  fi
+
+  INSTALL_MODE="$(cat "$INFRA_DIR/.install_mode")"
+  APP_DIR="${APP_DIR:-/opt/lovable-app}"
+  SUPABASE_DIR="${SUPABASE_DIR:-/opt/supabase}"
+
+  # Detecteer projecttype (nodig voor full/frontend mode)
+  if [[ -f "$APP_DIR/package.json" ]]; then
+    if grep -q '"@tanstack/react-start"' "$APP_DIR/package.json" 2>/dev/null; then
+      PROJECT_TYPE="ssr"
+    else
+      PROJECT_TYPE="spa"
+    fi
+  else
+    PROJECT_TYPE="spa"
+  fi
+
+  create_update_script
+  log_info "Updater vernieuwd (modus: $INSTALL_MODE, type: ${PROJECT_TYPE:-n/a})"
+}
+
 # === Main ===
 main() {
+  # --- Handle --refresh-updater flag (no full install needed) ---
+  for arg in "$@"; do
+    if [[ "$arg" == "--refresh-updater" ]]; then
+      refresh_updater
+      exit 0
+    fi
+  done
+
   print_banner
   detect_distro
   select_mode
