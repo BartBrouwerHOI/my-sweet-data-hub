@@ -138,6 +138,8 @@ Zelfde, maar stap 4 wordt: Server A (database) + Server B (frontend)
 6. **`JOUW_ANON_KEY` staat NIET in kopieerbare blokken** — beheerder moet key uit `credentials.txt` halen om copy-paste fouten te voorkomen
 7. **Autodetectie SPA vs SSR** — via `package.json` check op `@tanstack/react-start`
 8. **Autodetectie Debian vs RHEL** — via `/etc/os-release`, kiest juiste package manager en firewall
+9. **IP-detectie bij domeinnaam** — als een IP-adres wordt ingevuld bij "Domeinnaam" schakelt het script automatisch naar HTTP (geen SSL). Let's Encrypt kan geen certificaten uitgeven voor IP-adressen.
+10. **Migratie-fouten blokkeren succes** — als een app-migratie faalt, meldt het script "INSTALLATIE DEELS VOLTOOID" in plaats van vals succes
 
 ## Tech stack
 
