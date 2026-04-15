@@ -228,6 +228,7 @@ if [[ "$APP_ONLY" == true ]]; then
   cd "$APP_DIR" && git pull
 
   echo -e "${GREEN}[2/3]${NC} Frontend opnieuw bouwen (type: $PROJECT_TYPE)..."
+  write_env_production
   if [[ "$PROJECT_TYPE" == "spa" ]]; then
     cp "$INFRA_DIR/nginx/frontend-spa.conf" "$APP_DIR/nginx.conf"
     docker build -t lovable-frontend -f "$INFRA_DIR/Dockerfile.spa" "$APP_DIR"
@@ -268,6 +269,7 @@ echo -e "${GREEN}[2/5]${NC} App-code ophalen van GitHub..."
 cd "$APP_DIR" && git pull
 
 echo -e "${GREEN}[3/5]${NC} Frontend opnieuw bouwen (type: $PROJECT_TYPE)..."
+write_env_production
 if [[ "$PROJECT_TYPE" == "spa" ]]; then
   cp "$INFRA_DIR/nginx/frontend-spa.conf" "$APP_DIR/nginx.conf"
   docker build -t lovable-frontend -f "$INFRA_DIR/Dockerfile.spa" "$APP_DIR"
