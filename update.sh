@@ -82,7 +82,8 @@ write_env_production() {
     if [[ -f "$INFRA_DIR/.app_domain" ]]; then
       api_url="https://$(cat "$INFRA_DIR/.app_domain")"
     else
-      api_url="http://$(curl -sf ifconfig.me 2>/dev/null || echo localhost):8000"
+      api_url="http://$(curl -sf ifconfig.me 2>/dev/null || echo localhost)"
+      [[ ! "$api_url" =~ :[0-9]+$ ]] && api_url="${api_url}:8000"
     fi
   fi
 
