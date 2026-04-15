@@ -542,11 +542,19 @@ build_frontend() {
     anon_key="$ANON_KEY"
   fi
 
-  # .env.production schrijven in de app-directory
+  # .env.production schrijven in de app-directory (beide variabelenamen voor compatibiliteit)
   cat > "$APP_DIR/.env.production" <<ENVEOF
 VITE_SUPABASE_URL=$api_url
+VITE_SUPABASE_ANON_KEY=$anon_key
 VITE_SUPABASE_PUBLISHABLE_KEY=$anon_key
 ENVEOF
+
+  # Bewaar API URL en anon key voor de updater (overleeft git pull)
+  cat > "$INFRA_DIR/.app_env" <<APPENVEOF
+APP_API_URL=$api_url
+APP_ANON_KEY=$anon_key
+APPENVEOF
+  chmod 600 "$INFRA_DIR/.app_env"
 
   # Selecteer het juiste Dockerfile en kopieer nginx config indien SPA
   local dockerfile
@@ -922,6 +930,17 @@ bash "\$INFRA_DIR/install.sh" --refresh-updater 2>/dev/null || true
 
 echo "[2/3] App-code ophalen en bouwen (type: \$PROJECT_TYPE)..."
 cd "\$APP_DIR" && git pull
+
+# .env.production herschrijven met self-hosted waarden
+if [[ -f "\$INFRA_DIR/.app_env" ]]; then
+  source "\$INFRA_DIR/.app_env"
+  cat > "\$APP_DIR/.env.production" <<_ENVEOF
+VITE_SUPABASE_URL=\$APP_API_URL
+VITE_SUPABASE_ANON_KEY=\$APP_ANON_KEY
+VITE_SUPABASE_PUBLISHABLE_KEY=\$APP_ANON_KEY
+_ENVEOF
+  echo "  .env.production bijgewerkt"
+fi
 if [[ "\$PROJECT_TYPE" == "spa" ]]; then
   cp "\$INFRA_DIR/nginx/frontend-spa.conf" "\$APP_DIR/nginx.conf"
   docker build -t lovable-frontend -f "\$INFRA_DIR/Dockerfile.spa" "\$APP_DIR"
@@ -984,6 +1003,17 @@ if [[ "\$APP_ONLY" == true ]]; then
   echo "[1/3] App-code ophalen van GitHub..."
   cd "\$APP_DIR" && git pull
 
+  # .env.production herschrijven met self-hosted waarden
+  if [[ -f "\$INFRA_DIR/.app_env" ]]; then
+    source "\$INFRA_DIR/.app_env"
+    cat > "\$APP_DIR/.env.production" <<_ENVEOF
+VITE_SUPABASE_URL=\$APP_API_URL
+VITE_SUPABASE_ANON_KEY=\$APP_ANON_KEY
+VITE_SUPABASE_PUBLISHABLE_KEY=\$APP_ANON_KEY
+_ENVEOF
+    echo "  .env.production bijgewerkt"
+  fi
+
   echo "[2/3] Frontend opnieuw bouwen (type: \$PROJECT_TYPE)..."
   if [[ "\$PROJECT_TYPE" == "spa" ]]; then
     cp "\$INFRA_DIR/nginx/frontend-spa.conf" "\$APP_DIR/nginx.conf"
@@ -1023,6 +1053,17 @@ bash "\$INFRA_DIR/install.sh" --refresh-updater 2>/dev/null || true
 
 echo "[2/5] App-code ophalen van GitHub..."
 cd "\$APP_DIR" && git pull
+
+# .env.production herschrijven met self-hosted waarden
+if [[ -f "\$INFRA_DIR/.app_env" ]]; then
+  source "\$INFRA_DIR/.app_env"
+  cat > "\$APP_DIR/.env.production" <<_ENVEOF
+VITE_SUPABASE_URL=\$APP_API_URL
+VITE_SUPABASE_ANON_KEY=\$APP_ANON_KEY
+VITE_SUPABASE_PUBLISHABLE_KEY=\$APP_ANON_KEY
+_ENVEOF
+  echo "  .env.production bijgewerkt"
+fi
 
 echo "[3/5] Frontend opnieuw bouwen (type: \$PROJECT_TYPE)..."
 if [[ "\$PROJECT_TYPE" == "spa" ]]; then

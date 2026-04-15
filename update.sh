@@ -67,6 +67,19 @@ if [[ -n "$MARK_DONE" && "$MARK_DONE" != "next" ]]; then
   exit 0
 fi
 
+# --- .env.production herschrijven met self-hosted waarden ---
+write_env_production() {
+  if [[ -f "$INFRA_DIR/.app_env" ]]; then
+    source "$INFRA_DIR/.app_env"
+    cat > "$APP_DIR/.env.production" <<_ENVEOF
+VITE_SUPABASE_URL=$APP_API_URL
+VITE_SUPABASE_ANON_KEY=$APP_ANON_KEY
+VITE_SUPABASE_PUBLISHABLE_KEY=$APP_ANON_KEY
+_ENVEOF
+    echo "  .env.production bijgewerkt"
+  fi
+}
+
 # --- Strikte migratie-runner (gedeeld) ---
 run_strict_migrations() {
   if [[ ! -d "$APP_DIR/supabase/migrations" ]]; then return 0; fi
@@ -176,6 +189,7 @@ if [[ "$INSTALL_MODE" == "frontend" ]]; then
     cd "$APP_DIR" && git pull
   fi
 
+  write_env_production
   if [[ "$PROJECT_TYPE" == "spa" ]]; then
     cp "$INFRA_DIR/nginx/frontend-spa.conf" "$APP_DIR/nginx.conf"
     docker build -t lovable-frontend -f "$INFRA_DIR/Dockerfile.spa" "$APP_DIR"
@@ -214,6 +228,7 @@ if [[ "$APP_ONLY" == true ]]; then
   cd "$APP_DIR" && git pull
 
   echo -e "${GREEN}[2/3]${NC} Frontend opnieuw bouwen (type: $PROJECT_TYPE)..."
+  write_env_production
   if [[ "$PROJECT_TYPE" == "spa" ]]; then
     cp "$INFRA_DIR/nginx/frontend-spa.conf" "$APP_DIR/nginx.conf"
     docker build -t lovable-frontend -f "$INFRA_DIR/Dockerfile.spa" "$APP_DIR"
@@ -254,6 +269,7 @@ echo -e "${GREEN}[2/5]${NC} App-code ophalen van GitHub..."
 cd "$APP_DIR" && git pull
 
 echo -e "${GREEN}[3/5]${NC} Frontend opnieuw bouwen (type: $PROJECT_TYPE)..."
+write_env_production
 if [[ "$PROJECT_TYPE" == "spa" ]]; then
   cp "$INFRA_DIR/nginx/frontend-spa.conf" "$APP_DIR/nginx.conf"
   docker build -t lovable-frontend -f "$INFRA_DIR/Dockerfile.spa" "$APP_DIR"
