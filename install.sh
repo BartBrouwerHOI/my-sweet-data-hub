@@ -923,11 +923,56 @@ SUPABASE_DIR="$SUPABASE_DIR"
 PROJECT_TYPE="$PROJECT_TYPE"
 MIGRATIONS_DONE_DIR="$SUPABASE_DIR/.migrations_done"
 
+# --- Parse flags ---
+APP_ONLY=false
+SKIP_MIGRATIONS=false
+for arg in "\$@"; do
+  case "\$arg" in
+    --app-only) APP_ONLY=true ;;
+    --skip-migrations) SKIP_MIGRATIONS=true ;;
+  esac
+done
+
+if [[ "\$APP_ONLY" == true ]]; then
+  echo "=== Lovable App Updater (app-only) ==="
+  echo ""
+
+  echo "[1/3] App-code ophalen van GitHub..."
+  cd "\$APP_DIR" && git pull
+
+  echo "[2/3] Frontend opnieuw bouwen (type: \$PROJECT_TYPE)..."
+  if [[ "\$PROJECT_TYPE" == "spa" ]]; then
+    cp "\$INFRA_DIR/nginx/frontend-spa.conf" "\$APP_DIR/nginx.conf"
+    docker build -t lovable-frontend -f "\$INFRA_DIR/Dockerfile.spa" "\$APP_DIR"
+  else
+    docker build -t lovable-frontend -f "\$INFRA_DIR/Dockerfile.ssr" "\$APP_DIR"
+  fi
+
+  echo "[3/3] Frontend herstarten..."
+  docker stop lovable-frontend 2>/dev/null || true
+  docker rm lovable-frontend 2>/dev/null || true
+  docker run -d \\
+    --name lovable-frontend \\
+    --restart unless-stopped \\
+    -p 3000:3000 \\
+    lovable-frontend
+
+  echo ""
+  echo "✅ Update compleet (app-only)!"
+  exit 0
+fi
+
 echo "=== Lovable App Updater ==="
 echo ""
 
 echo "[1/5] Infra-repo updaten..."
 cd "\$INFRA_DIR" && git pull
+
+  # roles.sql en jwt.sql bijwerken vanuit infra-repo
+  if [[ -d "\$SUPABASE_DIR/volumes/db" ]]; then
+    cp "\$INFRA_DIR/volumes/db/roles.sql" "\$SUPABASE_DIR/volumes/db/roles.sql" 2>/dev/null || true
+    cp "\$INFRA_DIR/volumes/db/jwt.sql" "\$SUPABASE_DIR/volumes/db/jwt.sql" 2>/dev/null || true
+  fi
 
 echo "[2/5] App-code ophalen van GitHub..."
 cd "\$APP_DIR" && git pull
@@ -949,27 +994,31 @@ docker run -d \\
   -p 3000:3000 \\
   lovable-frontend
 
-echo "[5/5] Database migraties controleren..."
-mkdir -p "\$MIGRATIONS_DONE_DIR"
-if [[ -d "\$APP_DIR/supabase/migrations" ]]; then
-  for migration in "\$APP_DIR/supabase/migrations/"*.sql; do
-    if [[ -f "\$migration" ]]; then
-      local_name="\$(basename "\$migration")"
-      if [[ ! -f "\$MIGRATIONS_DONE_DIR/\$local_name" ]]; then
-        echo "  Nieuwe migratie: \$local_name"
-        if docker exec -i supabase-db bash -c \\
-          'PGPASSWORD=\$POSTGRES_PASSWORD psql -U postgres -d postgres -h localhost -v ON_ERROR_STOP=1 -X --single-transaction' \\
-          < "\$migration"; then
-          touch "\$MIGRATIONS_DONE_DIR/\$local_name"
-          echo "    ✅ Succesvol"
-        else
-          echo "    ❌ Mislukt — stoppen bij eerste fout"
-          echo "    Los het probleem op en draai daarna opnieuw: lovable-update"
-          exit 1
+if [[ "\$SKIP_MIGRATIONS" == true ]]; then
+  echo "[5/5] Database migraties overgeslagen (--skip-migrations)"
+else
+  echo "[5/5] Database migraties controleren..."
+  mkdir -p "\$MIGRATIONS_DONE_DIR"
+  if [[ -d "\$APP_DIR/supabase/migrations" ]]; then
+    for migration in "\$APP_DIR/supabase/migrations/"*.sql; do
+      if [[ -f "\$migration" ]]; then
+        local_name="\$(basename "\$migration")"
+        if [[ ! -f "\$MIGRATIONS_DONE_DIR/\$local_name" ]]; then
+          echo "  Nieuwe migratie: \$local_name"
+          if docker exec -i supabase-db bash -c \\
+            'PGPASSWORD=\$POSTGRES_PASSWORD psql -U postgres -d postgres -h localhost -v ON_ERROR_STOP=1 -X --single-transaction' \\
+            < "\$migration"; then
+            touch "\$MIGRATIONS_DONE_DIR/\$local_name"
+            echo "    ✅ Succesvol"
+          else
+            echo "    ❌ Mislukt — stoppen bij eerste fout"
+            echo "    Los het probleem op en draai daarna opnieuw: lovable-update"
+            exit 1
+          fi
         fi
       fi
-    fi
-  done
+    done
+  fi
 fi
 
 echo ""

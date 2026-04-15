@@ -6,21 +6,36 @@ set -euo pipefail
 # ============================================================
 # Gebruik bij voorkeur: lovable-update (aangemaakt door install.sh)
 # Dit script werkt als fallback als lovable-update niet bestaat.
+#
+# Flags:
+#   --app-only          Alleen app updaten + rebuilden (geen infra pull, geen migraties)
+#   --skip-migrations   Volledige update maar migraties overslaan
 # ============================================================
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
 NC='\033[0m'
 
 # Probeer eerst het geregistreerde commando
 if command -v lovable-update &>/dev/null; then
   echo -e "${BLUE}lovable-update gevonden, doorverwijzen...${NC}"
-  exec lovable-update
+  exec lovable-update "$@"
 fi
 
 echo -e "${BLUE}=== Lovable App Updater (fallback) ===${NC}"
 echo ""
+
+# --- Parse flags ---
+APP_ONLY=false
+SKIP_MIGRATIONS=false
+for arg in "$@"; do
+  case "$arg" in
+    --app-only) APP_ONLY=true ;;
+    --skip-migrations) SKIP_MIGRATIONS=true ;;
+  esac
+done
 
 # Detecteer paden
 INFRA_DIR="${INFRA_DIR:-/opt/lovable-infra}"
@@ -102,8 +117,12 @@ if [[ "$INSTALL_MODE" == "database" ]]; then
     echo -e "${GREEN}[2/4]${NC} App-repo niet gevonden — migraties overgeslagen"
   fi
 
-  echo -e "${GREEN}[3/4]${NC} Database migraties controleren..."
-  run_strict_migrations || exit 1
+  if [[ "$SKIP_MIGRATIONS" == true ]]; then
+    echo -e "${GREEN}[3/4]${NC} Database migraties overgeslagen (--skip-migrations)"
+  else
+    echo -e "${GREEN}[3/4]${NC} Database migraties controleren..."
+    run_strict_migrations || exit 1
+  fi
 
   echo -e "${GREEN}[4/4]${NC} Supabase stack herstarten..."
   cd "$SUPABASE_DIR" && docker compose up -d
@@ -122,11 +141,17 @@ if [[ "$INSTALL_MODE" == "frontend" ]]; then
     PROJECT_TYPE="spa"
   fi
 
-  echo -e "${GREEN}[1/3]${NC} Infra-repo updaten..."
-  cd "$INFRA_DIR" && git pull
+  if [[ "$APP_ONLY" == true ]]; then
+    echo -e "${GREEN}[1/3]${NC} App-code ophalen en bouwen (type: $PROJECT_TYPE)..."
+    cd "$APP_DIR" && git pull
+  else
+    echo -e "${GREEN}[1/3]${NC} Infra-repo updaten..."
+    cd "$INFRA_DIR" && git pull
 
-  echo -e "${GREEN}[2/3]${NC} App-code ophalen en bouwen (type: $PROJECT_TYPE)..."
-  cd "$APP_DIR" && git pull
+    echo -e "${GREEN}[2/3]${NC} App-code ophalen en bouwen (type: $PROJECT_TYPE)..."
+    cd "$APP_DIR" && git pull
+  fi
+
   if [[ "$PROJECT_TYPE" == "spa" ]]; then
     cp "$INFRA_DIR/nginx/frontend-spa.conf" "$APP_DIR/nginx.conf"
     docker build -t lovable-frontend -f "$INFRA_DIR/Dockerfile.spa" "$APP_DIR"
@@ -154,6 +179,36 @@ if grep -q '"@tanstack/react-start"' "$APP_DIR/package.json" 2>/dev/null; then
   PROJECT_TYPE="ssr"
 else
   PROJECT_TYPE="spa"
+fi
+
+# --- App-only shortcut ---
+if [[ "$APP_ONLY" == true ]]; then
+  echo "=== Lovable App Updater (app-only) ==="
+  echo ""
+
+  echo -e "${GREEN}[1/3]${NC} App-code ophalen van GitHub..."
+  cd "$APP_DIR" && git pull
+
+  echo -e "${GREEN}[2/3]${NC} Frontend opnieuw bouwen (type: $PROJECT_TYPE)..."
+  if [[ "$PROJECT_TYPE" == "spa" ]]; then
+    cp "$INFRA_DIR/nginx/frontend-spa.conf" "$APP_DIR/nginx.conf"
+    docker build -t lovable-frontend -f "$INFRA_DIR/Dockerfile.spa" "$APP_DIR"
+  else
+    docker build -t lovable-frontend -f "$INFRA_DIR/Dockerfile.ssr" "$APP_DIR"
+  fi
+
+  echo -e "${GREEN}[3/3]${NC} Frontend herstarten..."
+  docker stop lovable-frontend 2>/dev/null || true
+  docker rm lovable-frontend 2>/dev/null || true
+  docker run -d \
+    --name lovable-frontend \
+    --restart unless-stopped \
+    -p 3000:3000 \
+    lovable-frontend
+
+  echo ""
+  echo -e "${GREEN}✅ Update compleet (app-only)!${NC}"
+  exit 0
 fi
 
 echo "  Infra:  $INFRA_DIR"
@@ -191,8 +246,12 @@ docker run -d \
   -p 3000:3000 \
   lovable-frontend
 
-echo -e "${GREEN}[5/5]${NC} Database migraties controleren..."
-run_strict_migrations || exit 1
+if [[ "$SKIP_MIGRATIONS" == true ]]; then
+  echo -e "${GREEN}[5/5]${NC} Database migraties overgeslagen (--skip-migrations)"
+else
+  echo -e "${GREEN}[5/5]${NC} Database migraties controleren..."
+  run_strict_migrations || exit 1
+fi
 
 echo ""
 echo -e "${GREEN}✅ Update compleet!${NC}"
