@@ -834,6 +834,29 @@ APP_DIR="$APP_DIR"
 SUPABASE_DIR="$SUPABASE_DIR"
 MIGRATIONS_DONE_DIR="$SUPABASE_DIR/.migrations_done"
 
+# --- Parse flags ---
+SKIP_MIGRATIONS=false
+MARK_DONE=""
+for arg in "\$@"; do
+  case "\$arg" in
+    --skip-migrations) SKIP_MIGRATIONS=true ;;
+    --mark-done) MARK_DONE="next" ;;
+    *)
+      if [[ "\$MARK_DONE" == "next" ]]; then
+        MARK_DONE="\$arg"
+      fi
+      ;;
+  esac
+done
+
+# --- Mark-done shortcut ---
+if [[ -n "\$MARK_DONE" && "\$MARK_DONE" != "next" ]]; then
+  mkdir -p "\$MIGRATIONS_DONE_DIR"
+  touch "\$MIGRATIONS_DONE_DIR/\$MARK_DONE"
+  echo "✅ Migratie '\$MARK_DONE' gemarkeerd als gedaan."
+  exit 0
+fi
+
 echo "=== Lovable Supabase Updater ==="
 echo ""
 
@@ -926,12 +949,27 @@ MIGRATIONS_DONE_DIR="$SUPABASE_DIR/.migrations_done"
 # --- Parse flags ---
 APP_ONLY=false
 SKIP_MIGRATIONS=false
+MARK_DONE=""
 for arg in "\$@"; do
   case "\$arg" in
     --app-only) APP_ONLY=true ;;
     --skip-migrations) SKIP_MIGRATIONS=true ;;
+    --mark-done) MARK_DONE="next" ;;
+    *)
+      if [[ "\$MARK_DONE" == "next" ]]; then
+        MARK_DONE="\$arg"
+      fi
+      ;;
   esac
 done
+
+# --- Mark-done shortcut ---
+if [[ -n "\$MARK_DONE" && "\$MARK_DONE" != "next" ]]; then
+  mkdir -p "\$MIGRATIONS_DONE_DIR"
+  touch "\$MIGRATIONS_DONE_DIR/\$MARK_DONE"
+  echo "✅ Migratie '\$MARK_DONE' gemarkeerd als gedaan."
+  exit 0
+fi
 
 if [[ "\$APP_ONLY" == true ]]; then
   echo "=== Lovable App Updater (app-only) ==="

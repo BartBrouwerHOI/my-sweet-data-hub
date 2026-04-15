@@ -56,6 +56,9 @@ lovable-update --app-only
 
 # Volledige update zonder migraties:
 lovable-update --skip-migrations
+
+# Migratie handmatig als gedaan markeren (bij vastlopende migratie):
+lovable-update --mark-done <migratiebestand.sql>
 ```
 
 | Commando | Wat het doet |
@@ -63,6 +66,7 @@ lovable-update --skip-migrations
 | `lovable-update` | Haalt infra + app op, herbouwt frontend, draait migraties |
 | `lovable-update --app-only` | Alleen app-repo pullen + frontend rebuilden (geen infra, geen migraties) |
 | `lovable-update --skip-migrations` | Volledige update maar slaat database migraties over |
+| `lovable-update --mark-done <file>` | Markeer een migratie als uitgevoerd zonder deze te draaien |
 
 ## Interactieve Handleiding
 
