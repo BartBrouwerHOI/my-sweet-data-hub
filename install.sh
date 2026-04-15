@@ -542,9 +542,10 @@ build_frontend() {
     anon_key="$ANON_KEY"
   fi
 
-  # .env.production schrijven in de app-directory
+  # .env.production schrijven in de app-directory (beide variabelenamen voor compatibiliteit)
   cat > "$APP_DIR/.env.production" <<ENVEOF
 VITE_SUPABASE_URL=$api_url
+VITE_SUPABASE_ANON_KEY=$anon_key
 VITE_SUPABASE_PUBLISHABLE_KEY=$anon_key
 ENVEOF
 
