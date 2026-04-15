@@ -906,6 +906,26 @@ else
   echo "  ⚠ App-repo niet gevonden in \$APP_DIR — migraties overgeslagen"
 fi
 
+# --- Patch known problematic migrations ---
+_patch_target="\$APP_DIR/supabase/migrations/20260119083612_fc4680d3-4321-408e-ac77-817040a08a81.sql"
+if [[ -f "\$_patch_target" ]]; then
+  if grep -q "WHERE EXISTS" "\$_patch_target"; then
+    echo "  Migratie-patch: al gepatcht (overgeslagen)"
+  elif ! grep -q "fa761b51-9489-4289-917b-d1818f3cd508" "\$_patch_target"; then
+    echo "  Migratie-patch: UUID niet gevonden (overgeslagen)"
+  else
+    echo "  Migratie-patch: conditionele super_admin INSERT toepassen..."
+    perl -0777 -i -pe "s/INSERT INTO user_roles \\(user_id, role\\)[\\s\\S]*?VALUES[\\s\\S]*?\\('fa761b51-9489-4289-917b-d1818f3cd508'[\\s\\S]*?;/INSERT INTO user_roles (user_id, role)\\nSELECT 'fa761b51-9489-4289-917b-d1818f3cd508', 'super_admin'::app_role\\nWHERE EXISTS (\\n  SELECT 1 FROM public.profiles\\n  WHERE id = 'fa761b51-9489-4289-917b-d1818f3cd508'\\n)\\nON CONFLICT (user_id, role) DO NOTHING;/" "\$_patch_target"
+    if grep -q "WHERE EXISTS" "\$_patch_target"; then
+      echo "  Migratie-patch: ✅ toegepast"
+    else
+      echo "  Migratie-patch: ⚠️ patroon niet vervangen — controleer het bestand handmatig"
+    fi
+  fi
+else
+  echo "  Migratie-patch: doelbestand niet gevonden (overgeslagen)"
+fi
+
 echo "[3/4] Database migraties controleren..."
 mkdir -p "\$MIGRATIONS_DONE_DIR"
 if [[ -d "\$APP_DIR/supabase/migrations" ]]; then
@@ -921,7 +941,12 @@ if [[ -d "\$APP_DIR/supabase/migrations" ]]; then
           echo "    ✅ Succesvol"
         else
           echo "    ❌ Mislukt — stoppen bij eerste fout"
+          echo ""
+          echo "    De migratie '\$local_name' is mislukt."
           echo "    Los het probleem op en draai daarna opnieuw: lovable-update"
+          echo ""
+          echo "    Workaround: als de migratie handmatig al is opgelost:"
+          echo "      lovable-update --mark-done \$local_name"
           exit 1
         fi
       fi
@@ -1155,6 +1180,26 @@ docker run -d \\
 if [[ "\$SKIP_MIGRATIONS" == true ]]; then
   echo "[5/5] Database migraties overgeslagen (--skip-migrations)"
 else
+  # --- Patch known problematic migrations ---
+  _patch_target="\$APP_DIR/supabase/migrations/20260119083612_fc4680d3-4321-408e-ac77-817040a08a81.sql"
+  if [[ -f "\$_patch_target" ]]; then
+    if grep -q "WHERE EXISTS" "\$_patch_target"; then
+      echo "  Migratie-patch: al gepatcht (overgeslagen)"
+    elif ! grep -q "fa761b51-9489-4289-917b-d1818f3cd508" "\$_patch_target"; then
+      echo "  Migratie-patch: UUID niet gevonden (overgeslagen)"
+    else
+      echo "  Migratie-patch: conditionele super_admin INSERT toepassen..."
+      perl -0777 -i -pe "s/INSERT INTO user_roles \\(user_id, role\\)[\\s\\S]*?VALUES[\\s\\S]*?\\('fa761b51-9489-4289-917b-d1818f3cd508'[\\s\\S]*?;/INSERT INTO user_roles (user_id, role)\\nSELECT 'fa761b51-9489-4289-917b-d1818f3cd508', 'super_admin'::app_role\\nWHERE EXISTS (\\n  SELECT 1 FROM public.profiles\\n  WHERE id = 'fa761b51-9489-4289-917b-d1818f3cd508'\\n)\\nON CONFLICT (user_id, role) DO NOTHING;/" "\$_patch_target"
+      if grep -q "WHERE EXISTS" "\$_patch_target"; then
+        echo "  Migratie-patch: ✅ toegepast"
+      else
+        echo "  Migratie-patch: ⚠️ patroon niet vervangen — controleer het bestand handmatig"
+      fi
+    fi
+  else
+    echo "  Migratie-patch: doelbestand niet gevonden (overgeslagen)"
+  fi
+
   echo "[5/5] Database migraties controleren..."
   mkdir -p "\$MIGRATIONS_DONE_DIR"
   if [[ -d "\$APP_DIR/supabase/migrations" ]]; then
@@ -1170,7 +1215,12 @@ else
             echo "    ✅ Succesvol"
           else
             echo "    ❌ Mislukt — stoppen bij eerste fout"
+            echo ""
+            echo "    De migratie '\$local_name' is mislukt."
             echo "    Los het probleem op en draai daarna opnieuw: lovable-update"
+            echo ""
+            echo "    Workaround: als de migratie handmatig al is opgelost:"
+            echo "      lovable-update --mark-done \$local_name"
             exit 1
           fi
         fi
