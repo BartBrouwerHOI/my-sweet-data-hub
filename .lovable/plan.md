@@ -1,105 +1,46 @@
 
-## Probleem
 
-`--mark-done` werkt op jouw server nog niet, ook al staat de code wel in deze repo.
+## Analyse
 
-De oorzaak is niet de migratie zelf, maar de updater-architectuur:
+Het goede nieuws: `install.sh` schrijft **al** een `.env.production` met de juiste self-hosted URL en anon key (regel 546-549). Vite pikt dit op tijdens de Docker build en de waarden worden ingebakken in de frontend.
 
-- `lovable-update` op de server is een **gegenereerd script** in `/usr/local/bin/lovable-update`
-- dat script wordt alleen opnieuw aangemaakt door `install.sh` via `create_update_script()`
-- een normale `sudo lovable-update` doet wel `git pull` van de infra-repo, maar **regenereert zichzelf niet**
-- daardoor draait jouw server nog steeds een **oude wrapper**, die `--mark-done` niet echt afhandelt en gewoon de volledige flow uitvoert
+Er zijn echter **twee bugs** waardoor dit in de praktijk niet werkt:
 
-Ik zie dat ook terug in de code:
-- `install.sh` bevat wel de nieuwe `--mark-done` logica in `create_update_script()`
-- `update.sh` bevat die ook
-- maar `update.sh` doet bovenaan eerst:
-  - `if command -v lovable-update ... exec lovable-update "$@"`
-- dus zolang het oude `/usr/local/bin/lovable-update` bestaat, kom je alsnog weer in dat verouderde script terecht
+### Bug 1: Update-script schrijft `.env.production` niet opnieuw
+
+Bij `lovable-update` wordt de app opnieuw gebouwd (`docker build`), maar de `.env.production` wordt **niet** herschreven. Als `git pull` een `.env` of `.env.production` uit de app-repo haalt (met Lovable Cloud waarden), overschrijft dat jouw self-hosted waarden.
+
+### Bug 2: Variabelenaam mismatch
+
+Het install-script schrijft `VITE_SUPABASE_PUBLISHABLE_KEY`, maar Lovable-apps gebruiken standaard `VITE_SUPABASE_ANON_KEY`. Als de app de verkeerde naam zoekt, vindt hij niets en valt terug op een hardcoded waarde (de Lovable Cloud URL).
 
 ## Plan
 
-### 1. Handleiding en documentatie corrigeren
-Ik pas de documentatie aan zodat die niet suggereert dat `--mark-done` meteen werkt na alleen een gewone update.
+### 1. Update-script: `.env.production` herschrijven vóór elke build
 
-Concreet:
-- in `INSTALL.md` verduidelijken dat nieuwe flags pas actief zijn nadat de updater zelf is vernieuwd
-- in `/handleiding` een korte waarschuwing toevoegen bij `--mark-done`:
-  - als `lovable-update --mark-done ...` toch een volledige update start, draait de server nog een oudere gegenereerde updater
+In de gegenereerde `lovable-update` wrapper (in `create_update_script()`) toevoegen dat `.env.production` opnieuw wordt geschreven vóór `docker build`, zowel in de volledige update als in `--app-only`.
 
-### 2. Updater self-refresh oplossen
-Ik pas de updateflow aan zodat een infra-update ook de echte `/usr/local/bin/lovable-update` opnieuw kan genereren zonder volledige herinstallatie.
+Dit zorgt ervoor dat de self-hosted waarden altijd winnen, ook als de app-repo eigen `.env` bestanden meebrengt.
 
-Waarschijnlijke aanpak:
-- een aparte refresh-stap toevoegen, bijvoorbeeld:
-  - `install.sh --refresh-updater`
-  - of een klein los script dat alleen `create_update_script`-achtige logica uitvoert
-- doel:
-  - bestaande paden/mode uitlezen
-  - `/usr/local/bin/lovable-update` herschrijven
-  - geen Docker/Supabase reinstall
-  - geen secrets regenereren
+### 2. Beide variabelenamen schrijven
 
-### 3. Fallback veiliger maken
-Ik pas `update.sh` aan zodat die niet blind doorstuurt naar een bestaande `lovable-update` als juist die wrapper mogelijk verouderd is.
-
-Mogelijke veilige variant:
-- alleen doorverwijzen als expliciet gewenst
-- of bij `--mark-done` juist de fallback-logica lokaal afhandelen
-- of een versie/check toevoegen zodat een stale wrapper wordt omzeild
-
-### 4. Directe server-herstelroute opnemen
-Omdat jij nu vastzit, neem ik ook een praktische herstelroute mee in de docs en flow:
-
-```text
-doel:
-1. updater wrapper vernieuwen
-2. daarna pas:
-   lovable-update --mark-done <migratie.sql>
-3. daarna:
-   lovable-update
+`.env.production` krijgt beide varianten:
 ```
+VITE_SUPABASE_URL=https://jouw-domein.nl
+VITE_SUPABASE_ANON_KEY=<key>
+VITE_SUPABASE_PUBLISHABLE_KEY=<key>
+```
+Dan werkt het ongeacht welke naam de app gebruikt.
 
-Daarmee voorkom je dat mensen opnieuw denken dat `--mark-done` kapot is, terwijl in werkelijkheid alleen de oude wrapper nog actief is.
+### 3. Dockerfile: `.env*` niet uitsluiten
+
+Controleren dat `.dockerignore` (als die bestaat in de app) geen `.env.production` uitsluit.
 
 ## Bestanden
 
-- `install.sh` — mechanisme toevoegen om `/usr/local/bin/lovable-update` veilig te vernieuwen zonder herinstallatie
-- `update.sh` — fallback/doorverwijslogica verbeteren
-- `INSTALL.md` — uitleg corrigeren
-- `src/routes/handleiding.tsx` — waarschuwing + juiste herstelstappen toevoegen
+- `install.sh` — variabelenaam toevoegen + update-script aanpassen zodat `.env.production` bij elke build wordt herschreven
 
-## Technische details
+## Resultaat
 
-Huidige keten:
+Na deze wijziging hoeft de gebruiker **niets handmatig aan te passen** in de app-repo. Het install- en update-script zorgen er automatisch voor dat de frontend altijd de self-hosted Supabase URL en key gebruikt.
 
-```text
-server commando
-  -> /usr/local/bin/lovable-update   (gegenereerd, mogelijk oud)
-     -> git pull infra repo
-     -> nieuwe install.sh komt binnen
-     -> maar wrapper blijft oud
-```
-
-Gewenste keten:
-
-```text
-server commando
-  -> updater ververst eerst zichzelf of kan apart ververst worden
-  -> daarna werken nieuwe flags echt
-```
-
-Extra detail:
-- `update.sh` heeft nu ook de bug dat het `MIGRATIONS_DONE_DIR` gebruikt vóór die variabele wordt gezet
-- maar in jouw geval is dat niet eens de hoofdroute, omdat het script meteen doorstuurt naar het bestaande `lovable-update`
-- de echte kern is dus: **stale generated updater**
-
-## Verwacht resultaat
-
-Na implementatie kun je lokaal op de server updaten zonder herinstallatie én zonder vast te lopen op een oude wrapper:
-
-- infra-update haalt nieuwe updatercode op
-- updater kan zichzelf vernieuwen
-- `--mark-done` werkt daarna echt
-- de geblokkeerde migratie kan worden overgeslagen
-- daarna kan `lovable-update` de resterende nieuwe migraties normaal uitvoeren
