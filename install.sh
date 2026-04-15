@@ -127,6 +127,22 @@ select_mode() {
 
 # --- User input ---
 CLONE_FOR_MIGRATIONS=""
+IS_IP_ADDRESS=false
+PROTOCOL="https"
+
+# --- Helper: detect if input is an IP address ---
+is_ip_address() {
+  local input="$1"
+  # IPv4
+  if [[ "$input" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    return 0
+  fi
+  # IPv6
+  if [[ "$input" =~ : ]]; then
+    return 0
+  fi
+  return 1
+}
 
 gather_input() {
   echo ""
@@ -137,6 +153,22 @@ gather_input() {
   fi
 
   read -p "Domeinnaam (bijv. mijnapp.nl, of laat leeg voor IP): " DOMAIN
+
+  # Detect IP vs domain
+  if [[ -n "$DOMAIN" ]] && is_ip_address "$DOMAIN"; then
+    log_warn "Je hebt een IP-adres ingevuld als domeinnaam: $DOMAIN"
+    echo "  → SSL (Let's Encrypt) werkt alleen met een echte domeinnaam, niet met een IP."
+    echo "  → De app wordt bereikbaar via http://$DOMAIN (zonder SSL)."
+    IS_IP_ADDRESS=true
+    PROTOCOL="http"
+  elif [[ -z "$DOMAIN" ]]; then
+    IS_IP_ADDRESS=true
+    PROTOCOL="http"
+  else
+    IS_IP_ADDRESS=false
+    PROTOCOL="https"
+  fi
+
   read -p "Admin e-mailadres: " ADMIN_EMAIL
 
   if [[ "$INSTALL_MODE" != "frontend" ]]; then
@@ -348,7 +380,7 @@ setup_supabase() {
 
   local api_url
   if [[ -n "$DOMAIN" ]]; then
-    api_url="https://$DOMAIN"
+    api_url="${PROTOCOL}://$DOMAIN"
   else
     api_url="http://$(curl -s ifconfig.me)"
   fi
@@ -447,7 +479,7 @@ wait_for_bootstrap() {
 
 # --- Run migrations after Supabase is healthy ---
 run_migrations() {
-  if [[ ! -d "$APP_DIR/supabase/migrations" ]]; then return; fi
+  if [[ ! -d "$APP_DIR/supabase/migrations" ]]; then return 0; fi
 
   # Wacht tot bootstrap klaar is (auth schema, rollen, etc.)
   if ! wait_for_bootstrap; then
@@ -478,20 +510,19 @@ run_migrations() {
         echo "    ❌ Mislukt — stoppen bij eerste fout"
         echo ""
         echo "  De migratie '$name' is mislukt."
-        echo "  Los het probleem op en draai daarna: lovable-update"
+        echo "  Dit is waarschijnlijk een probleem in de app-repo, niet in de infrastructuur."
+        echo "  Fix de migratie in je app-repo en draai daarna: lovable-update"
         echo "  Of reset de database volledig:"
         echo "    cd $SUPABASE_DIR && docker compose down -v"
         echo "    rm -rf $SUPABASE_DIR/volumes/db/data $SUPABASE_DIR/.migrations_done"
         echo "    sudo bash $INFRA_DIR/install.sh"
-        failed=1
-        break
+        return 1
       fi
     fi
   done
 
-  if [[ $failed -eq 0 ]]; then
-    log_info "Alle migraties succesvol uitgevoerd!"
-  fi
+  log_info "Alle migraties succesvol uitgevoerd!"
+  return 0
 }
 
 # --- Build frontend (SPA of SSR, Dockerfile uit INFRA_DIR) ---
@@ -504,7 +535,7 @@ build_frontend() {
     anon_key="$DB_SERVER_ANON_KEY"
   else
     if [[ -n "$DOMAIN" ]]; then
-      api_url="https://$DOMAIN"
+      api_url="${PROTOCOL}://$DOMAIN"
     else
       api_url="http://$(curl -s ifconfig.me)"
     fi
@@ -738,6 +769,13 @@ NGINXEOF
 
 # --- SSL ---
 setup_ssl() {
+  if [[ "$IS_IP_ADDRESS" == true ]]; then
+    log_warn "IP-adres gedetecteerd — SSL (Let's Encrypt) overgeslagen."
+    echo "  Let's Encrypt kan geen certificaten uitgeven voor IP-adressen."
+    echo "  Gebruik een domeinnaam als je SSL wilt."
+    return
+  fi
+
   if [[ -n "$DOMAIN" ]]; then
     log_info "SSL certificaat aanvragen via Let's Encrypt..."
     certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$ADMIN_EMAIL" || {
@@ -946,7 +984,7 @@ UPDATEEOF
 print_summary() {
   local url
   if [[ -n "$DOMAIN" ]]; then
-    url="https://$DOMAIN"
+    url="${PROTOCOL}://$DOMAIN"
   else
     url="http://$(curl -s ifconfig.me)"
   fi
@@ -1022,20 +1060,26 @@ main() {
     clone_app
   fi
 
+  local migration_failed=false
+
   case "$INSTALL_MODE" in
     full)
       generate_secrets
       setup_supabase
       build_frontend
       start_supabase
-      run_migrations
+      if ! run_migrations; then
+        migration_failed=true
+      fi
       start_frontend
       ;;
     database)
       generate_secrets
       setup_supabase
       start_supabase
-      run_migrations
+      if ! run_migrations; then
+        migration_failed=true
+      fi
       ;;
     frontend)
       build_frontend
@@ -1050,6 +1094,55 @@ main() {
 
   # Schrijf install-mode marker zodat update.sh (fallback) de juiste modus kent
   echo "$INSTALL_MODE" > "$INFRA_DIR/.install_mode"
+
+  if [[ "$migration_failed" == true ]]; then
+    echo ""
+    echo -e "${YELLOW}╔══════════════════════════════════════════════╗${NC}"
+    echo -e "${YELLOW}║   ⚠️  INSTALLATIE DEELS VOLTOOID              ║${NC}"
+    echo -e "${YELLOW}║   Modus: $(printf '%-30s' "$INSTALL_MODE")    ║${NC}"
+    echo -e "${YELLOW}╚══════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "  De infrastructuur is gezond en alle services draaien."
+    echo -e "  Echter, ${RED}één of meer database-migraties zijn mislukt${NC}."
+    echo -e "  Dit is waarschijnlijk een probleem in je app-repo, niet in de infra."
+    echo ""
+    echo -e "  ${BLUE}Volgende stappen:${NC}"
+    echo -e "  1. Fix de mislukte migratie in je app-repo (zie foutmelding hierboven)"
+    echo -e "  2. Push de fix naar GitHub"
+    echo -e "  3. Draai op de server: ${GREEN}lovable-update${NC}"
+    echo ""
+
+    if [[ "$INSTALL_MODE" != "frontend" ]]; then
+      echo -e "  🔑 Supabase Keys (BEWAAR DEZE!):"
+      echo -e "     Anon Key:         ${YELLOW}$ANON_KEY${NC}"
+      echo -e "     Service Role Key: ${YELLOW}$SERVICE_ROLE_KEY${NC}"
+      echo -e "     JWT Secret:       ${YELLOW}$JWT_SECRET${NC}"
+      echo -e "     DB Wachtwoord:    ${YELLOW}$POSTGRES_PASSWORD${NC}"
+      echo ""
+      {
+        echo "=== Lovable Supabase Credentials ==="
+        echo "Generated: $(date)"
+        echo "Mode: $INSTALL_MODE (MIGRATIES INCOMPLEET)"
+        [[ -n "$PROJECT_TYPE" ]] && echo "Project Type: $PROJECT_TYPE"
+        echo ""
+        echo "Anon Key: $ANON_KEY"
+        echo "Service Role Key: $SERVICE_ROLE_KEY"
+        echo "JWT Secret: $JWT_SECRET"
+        echo "Database Password: $POSTGRES_PASSWORD"
+        echo "Dashboard Password: $DASHBOARD_PASSWORD"
+        echo "Admin Email: $ADMIN_EMAIL"
+        echo ""
+        echo "Infra Dir: $INFRA_DIR"
+        [[ -d "$APP_DIR/.git" ]] && echo "App Dir: $APP_DIR"
+      } > "$SUPABASE_DIR/credentials.txt"
+      chmod 600 "$SUPABASE_DIR/credentials.txt"
+      log_info "Credentials opgeslagen in: $SUPABASE_DIR/credentials.txt"
+    fi
+
+    echo -e "  🔄 Updates: ${BLUE}lovable-update${NC}"
+    echo ""
+    exit 1
+  fi
 
   print_summary
 }
