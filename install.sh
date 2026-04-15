@@ -1106,7 +1106,7 @@ main() {
     echo -e "  Echter, ${RED}één of meer database-migraties zijn mislukt${NC}."
     echo -e "  Dit is waarschijnlijk een probleem in je app-repo, niet in de infra."
     echo ""
-    echo -e "  ${BLUE}Volgende stappen:${NC}"
+    echo -e "  ${YELLOW}Volgende stappen:${NC}"
     echo -e "  1. Fix de mislukte migratie in je app-repo (zie foutmelding hierboven)"
     echo -e "  2. Push de fix naar GitHub"
     echo -e "  3. Draai op de server: ${GREEN}lovable-update${NC}"
@@ -1139,7 +1139,20 @@ main() {
       log_info "Credentials opgeslagen in: $SUPABASE_DIR/credentials.txt"
     fi
 
-    echo -e "  🔄 Updates: ${BLUE}lovable-update${NC}"
+    echo ""
+    local url="${PROTOCOL}://${DOMAIN}"
+    if [[ "$INSTALL_MODE" != "database" ]]; then
+      echo -e "  🌐 App URL: ${YELLOW}$url${NC}"
+    fi
+    if [[ "$INSTALL_MODE" != "frontend" ]]; then
+      echo -e "  📊 Studio:  ${YELLOW}$url:8080${NC}"
+    fi
+    echo ""
+    echo -e "  📂 Infra:   ${YELLOW}$INFRA_DIR${NC}"
+    if [[ -d "$APP_DIR/.git" ]]; then
+      echo -e "  📂 App:     ${YELLOW}$APP_DIR${NC}"
+    fi
+    echo -e "  🔄 Updates: ${YELLOW}lovable-update${NC}"
     echo ""
     exit 1
   fi
