@@ -101,10 +101,21 @@ _ENVEOF
 # --- Patch known problematic migrations before running ---
 patch_known_migrations() {
   local target="$APP_DIR/supabase/migrations/20260119083612_fc4680d3-4321-408e-ac77-817040a08a81.sql"
-  if [[ -f "$target" ]] && grep -q "VALUES ('fa761b51-" "$target"; then
-    echo "  Migratie-patch: conditionele super_admin INSERT"
-    sed -i "s|INSERT INTO user_roles (user_id, role).*VALUES.*('fa761b51-9489-4289-917b-d1818f3cd508'.*|INSERT INTO user_roles (user_id, role) SELECT 'fa761b51-9489-4289-917b-d1818f3cd508', 'super_admin'::app_role WHERE EXISTS (SELECT 1 FROM public.profiles WHERE id = 'fa761b51-9489-4289-917b-d1818f3cd508') ON CONFLICT (user_id, role) DO NOTHING;|" "$target"
+  if [[ ! -f "$target" ]]; then
+    echo "  Migratie-patch: doelbestand niet gevonden (overgeslagen)"
+    return 0
   fi
+  if grep -q "WHERE EXISTS" "$target"; then
+    echo "  Migratie-patch: al gepatcht (overgeslagen)"
+    return 0
+  fi
+  if ! grep -q "fa761b51-9489-4289-917b-d1818f3cd508" "$target"; then
+    echo "  Migratie-patch: UUID niet gevonden in doelbestand (overgeslagen)"
+    return 0
+  fi
+  echo "  Migratie-patch: conditionele super_admin INSERT toepassen..."
+  perl -0777 -i -pe "s/INSERT INTO user_roles \(user_id, role\)[\s\S]*?VALUES[\s\S]*?\('fa761b51-9489-4289-917b-d1818f3cd508'[\s\S]*?;/INSERT INTO user_roles (user_id, role)\nSELECT 'fa761b51-9489-4289-917b-d1818f3cd508', 'super_admin'::app_role\nWHERE EXISTS (\n  SELECT 1 FROM public.profiles\n  WHERE id = 'fa761b51-9489-4289-917b-d1818f3cd508'\n)\nON CONFLICT (user_id, role) DO NOTHING;/" "$target"
+  echo "  Migratie-patch: ✅ toegepast"
 }
 
 # --- Strikte migratie-runner (gedeeld) ---
@@ -130,6 +141,9 @@ run_strict_migrations() {
         echo "  De migratie '$local_name' is mislukt."
         echo "  Dit is waarschijnlijk een probleem in de app-repo, niet in de infra."
         echo "  Los het probleem op en draai daarna opnieuw: lovable-update"
+        echo ""
+        echo "  Workaround: als je zeker weet dat de migratie handmatig al is opgelost:"
+        echo "    lovable-update --mark-done $local_name"
         return 1
       fi
     fi
