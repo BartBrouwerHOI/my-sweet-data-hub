@@ -72,21 +72,34 @@ write_env_production() {
   local api_url=""
   local anon_key=""
 
-  if [[ -f "$INFRA_DIR/.app_env" ]]; then
-    source "$INFRA_DIR/.app_env"
-    api_url="$APP_API_URL"
-    anon_key="$APP_ANON_KEY"
-  elif [[ -f "$SUPABASE_DIR/.env" ]]; then
-    # Fallback: lees direct uit Supabase .env
+  # --- Resolve anon key: /opt/supabase/.env is de bron van waarheid ---
+  if [[ -f "$SUPABASE_DIR/.env" ]]; then
     anon_key=$(grep "^ANON_KEY=" "$SUPABASE_DIR/.env" | cut -d= -f2-)
-    if [[ -f "$INFRA_DIR/.app_domain" ]]; then
-      api_url="https://$(cat "$INFRA_DIR/.app_domain")"
-    else
-      api_url="http://$(curl -sf ifconfig.me 2>/dev/null || echo localhost)"
-      [[ ! "$api_url" =~ :[0-9]+$ ]] && api_url="${api_url}:8000"
-    fi
+  fi
+  if [[ -z "$anon_key" ]] && [[ -f "$INFRA_DIR/.app_env" ]]; then
+    source "$INFRA_DIR/.app_env" 2>/dev/null || true
+    anon_key="${APP_ANON_KEY:-}"
   fi
 
+  # --- Resolve API URL: .app_domain (echte domeinnaam) → .app_env → fallback IP ---
+  if [[ -f "$INFRA_DIR/.app_domain" ]]; then
+    local _domain
+    _domain="$(cat "$INFRA_DIR/.app_domain")"
+    # Alleen gebruiken als het GEEN IP-adres is
+    if [[ ! "$_domain" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+      api_url="https://$_domain"
+    fi
+  fi
+  if [[ -z "$api_url" ]] && [[ -f "$INFRA_DIR/.app_env" ]]; then
+    source "$INFRA_DIR/.app_env" 2>/dev/null || true
+    api_url="${APP_API_URL:-}"
+  fi
+  if [[ -z "$api_url" ]]; then
+    api_url="http://$(curl -sf ifconfig.me 2>/dev/null || echo localhost)"
+    [[ ! "$api_url" =~ :[0-9]+$ ]] && api_url="${api_url}:8000"
+  fi
+
+  # --- Schrijf .env.production ---
   if [[ -n "$api_url" && -n "$anon_key" ]]; then
     cat > "$APP_DIR/.env.production" <<_ENVEOF
 VITE_SUPABASE_URL=$api_url
@@ -94,6 +107,13 @@ VITE_SUPABASE_ANON_KEY=$anon_key
 VITE_SUPABASE_PUBLISHABLE_KEY=$anon_key
 _ENVEOF
     echo -e "  ${GREEN}.env.production → $api_url${NC}"
+
+    # --- Auto-sync .app_env zodat het altijd klopt ---
+    cat > "$INFRA_DIR/.app_env" <<_SYNCEOF
+APP_API_URL=$api_url
+APP_ANON_KEY=$anon_key
+_SYNCEOF
+    chmod 600 "$INFRA_DIR/.app_env"
   else
     echo -e "  ${YELLOW}⚠️  Kan .env.production niet schrijven — .app_env en supabase/.env ontbreken${NC}"
   fi
