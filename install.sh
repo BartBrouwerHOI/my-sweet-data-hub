@@ -549,6 +549,13 @@ VITE_SUPABASE_ANON_KEY=$anon_key
 VITE_SUPABASE_PUBLISHABLE_KEY=$anon_key
 ENVEOF
 
+  # Bewaar API URL en anon key voor de updater (overleeft git pull)
+  cat > "$INFRA_DIR/.app_env" <<APPENVEOF
+APP_API_URL=$api_url
+APP_ANON_KEY=$anon_key
+APPENVEOF
+  chmod 600 "$INFRA_DIR/.app_env"
+
   # Selecteer het juiste Dockerfile en kopieer nginx config indien SPA
   local dockerfile
   if [[ "$PROJECT_TYPE" == "spa" ]]; then
