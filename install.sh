@@ -936,15 +936,30 @@ bash "\$INFRA_DIR/install.sh" --refresh-updater 2>/dev/null || true
 echo "[2/3] App-code ophalen en bouwen (type: \$PROJECT_TYPE)..."
 cd "\$APP_DIR" && git pull
 
-# .env.production herschrijven met self-hosted waarden
+# .env.production herschrijven met self-hosted waarden (met fallback)
+_api_url=""
+_anon_key=""
 if [[ -f "\$INFRA_DIR/.app_env" ]]; then
   source "\$INFRA_DIR/.app_env"
+  _api_url="\$APP_API_URL"
+  _anon_key="\$APP_ANON_KEY"
+elif [[ -f "\$SUPABASE_DIR/.env" ]]; then
+  _anon_key=\$(grep "^ANON_KEY=" "\$SUPABASE_DIR/.env" | cut -d= -f2-)
+  if [[ -f "\$INFRA_DIR/.app_domain" ]]; then
+    _api_url="https://\$(cat "\$INFRA_DIR/.app_domain")"
+  else
+    _api_url="http://\$(curl -sf ifconfig.me 2>/dev/null || echo localhost)"
+  fi
+fi
+if [[ -n "\$_api_url" && -n "\$_anon_key" ]]; then
   cat > "\$APP_DIR/.env.production" <<_ENVEOF
-VITE_SUPABASE_URL=\$APP_API_URL
-VITE_SUPABASE_ANON_KEY=\$APP_ANON_KEY
-VITE_SUPABASE_PUBLISHABLE_KEY=\$APP_ANON_KEY
+VITE_SUPABASE_URL=\$_api_url
+VITE_SUPABASE_ANON_KEY=\$_anon_key
+VITE_SUPABASE_PUBLISHABLE_KEY=\$_anon_key
 _ENVEOF
-  echo "  .env.production bijgewerkt"
+  echo "  .env.production → \$_api_url"
+else
+  echo "  ⚠️  Kan .env.production niet schrijven — .app_env en supabase/.env ontbreken"
 fi
 if [[ "\$PROJECT_TYPE" == "spa" ]]; then
   cp "\$INFRA_DIR/nginx/frontend-spa.conf" "\$APP_DIR/nginx.conf"
