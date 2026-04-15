@@ -98,6 +98,15 @@ _ENVEOF
   fi
 }
 
+# --- Patch known problematic migrations before running ---
+patch_known_migrations() {
+  local target="$APP_DIR/supabase/migrations/20260119083612_fc4680d3-4321-408e-ac77-817040a08a81.sql"
+  if [[ -f "$target" ]] && grep -q "VALUES ('fa761b51-" "$target"; then
+    echo "  Migratie-patch: conditionele super_admin INSERT"
+    sed -i "s|INSERT INTO user_roles (user_id, role).*VALUES.*('fa761b51-9489-4289-917b-d1818f3cd508'.*|INSERT INTO user_roles (user_id, role) SELECT 'fa761b51-9489-4289-917b-d1818f3cd508', 'super_admin'::app_role WHERE EXISTS (SELECT 1 FROM public.profiles WHERE id = 'fa761b51-9489-4289-917b-d1818f3cd508') ON CONFLICT (user_id, role) DO NOTHING;|" "$target"
+  fi
+}
+
 # --- Strikte migratie-runner (gedeeld) ---
 run_strict_migrations() {
   if [[ ! -d "$APP_DIR/supabase/migrations" ]]; then return 0; fi
@@ -176,6 +185,7 @@ if [[ "$INSTALL_MODE" == "database" ]]; then
     echo -e "${GREEN}[3/4]${NC} Database migraties overgeslagen (--skip-migrations)"
   else
     echo -e "${GREEN}[3/4]${NC} Database migraties controleren..."
+    patch_known_migrations
     run_strict_migrations || exit 1
   fi
 
@@ -308,6 +318,7 @@ if [[ "$SKIP_MIGRATIONS" == true ]]; then
   echo -e "${GREEN}[5/5]${NC} Database migraties overgeslagen (--skip-migrations)"
 else
   echo -e "${GREEN}[5/5]${NC} Database migraties controleren..."
+  patch_known_migrations
   run_strict_migrations || exit 1
 fi
 

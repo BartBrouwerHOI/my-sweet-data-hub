@@ -477,6 +477,15 @@ wait_for_bootstrap() {
   return 1
 }
 
+# --- Patch known problematic migrations before running ---
+patch_known_migrations() {
+  local target="$APP_DIR/supabase/migrations/20260119083612_fc4680d3-4321-408e-ac77-817040a08a81.sql"
+  if [[ -f "$target" ]] && grep -q "VALUES ('fa761b51-" "$target"; then
+    echo "  Migratie-patch: conditionele super_admin INSERT"
+    sed -i "s|INSERT INTO user_roles (user_id, role).*VALUES.*('fa761b51-9489-4289-917b-d1818f3cd508'.*|INSERT INTO user_roles (user_id, role) SELECT 'fa761b51-9489-4289-917b-d1818f3cd508', 'super_admin'::app_role WHERE EXISTS (SELECT 1 FROM public.profiles WHERE id = 'fa761b51-9489-4289-917b-d1818f3cd508') ON CONFLICT (user_id, role) DO NOTHING;|" "$target"
+  fi
+}
+
 # --- Run migrations after Supabase is healthy ---
 run_migrations() {
   if [[ ! -d "$APP_DIR/supabase/migrations" ]]; then return 0; fi
@@ -1290,6 +1299,7 @@ main() {
       setup_supabase
       build_frontend
       start_supabase
+      patch_known_migrations
       if ! run_migrations; then
         migration_failed=true
       fi
@@ -1299,6 +1309,7 @@ main() {
       generate_secrets
       setup_supabase
       start_supabase
+      patch_known_migrations
       if ! run_migrations; then
         migration_failed=true
       fi
