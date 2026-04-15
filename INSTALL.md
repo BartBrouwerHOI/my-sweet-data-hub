@@ -59,7 +59,15 @@ lovable-update --skip-migrations
 
 # Migratie handmatig als gedaan markeren (bij vastlopende migratie):
 lovable-update --mark-done <migratiebestand.sql>
+
+# Updater zelf vernieuwen (na infra-update met nieuwe flags):
+sudo bash /opt/lovable-infra/install.sh --refresh-updater
 ```
+
+> **Let op:** `lovable-update` op de server is een gegenereerd script in `/usr/local/bin/`. Bij een normale update wordt dit script automatisch vernieuwd na `git pull` van de infra-repo. Mocht een nieuwe flag (zoals `--mark-done`) niet werken, vernieuw de updater handmatig:
+> ```bash
+> sudo bash /opt/lovable-infra/install.sh --refresh-updater
+> ```
 
 | Commando | Wat het doet |
 |----------|-------------|
@@ -67,6 +75,7 @@ lovable-update --mark-done <migratiebestand.sql>
 | `lovable-update --app-only` | Alleen app-repo pullen + frontend rebuilden (geen infra, geen migraties) |
 | `lovable-update --skip-migrations` | Volledige update maar slaat database migraties over |
 | `lovable-update --mark-done <file>` | Markeer een migratie als uitgevoerd zonder deze te draaien |
+| `install.sh --refresh-updater` | Vernieuw het `lovable-update` commando zonder herinstallatie |
 
 ## Interactieve Handleiding
 

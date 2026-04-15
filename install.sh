@@ -917,6 +917,9 @@ echo ""
 echo "[1/3] Infra-repo updaten..."
 cd "\$INFRA_DIR" && git pull
 
+# Updater zelf vernieuwen na infra pull
+bash "\$INFRA_DIR/install.sh" --refresh-updater 2>/dev/null || true
+
 echo "[2/3] App-code ophalen en bouwen (type: \$PROJECT_TYPE)..."
 cd "\$APP_DIR" && git pull
 if [[ "\$PROJECT_TYPE" == "spa" ]]; then
