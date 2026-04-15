@@ -1028,18 +1028,18 @@ print_summary() {
   fi
 
   if [[ "$INSTALL_MODE" != "database" ]]; then
-    echo -e "  🌐 App URL: ${BLUE}$url${NC}"
+    echo -e "  🌐 App URL: ${YELLOW}$url${NC}"
   fi
   if [[ "$INSTALL_MODE" != "frontend" ]]; then
-    echo -e "  📊 Studio:  ${BLUE}$url:8080${NC}"
+    echo -e "  📊 Studio:  ${YELLOW}$url:8080${NC}"
   fi
 
   echo ""
-  echo -e "  📂 Infra:   ${BLUE}$INFRA_DIR${NC}"
+  echo -e "  📂 Infra:   ${YELLOW}$INFRA_DIR${NC}"
   if [[ -d "$APP_DIR/.git" ]]; then
-    echo -e "  📂 App:     ${BLUE}$APP_DIR${NC}"
+    echo -e "  📂 App:     ${YELLOW}$APP_DIR${NC}"
   fi
-  echo -e "  🔄 Updates: ${BLUE}lovable-update${NC}"
+  echo -e "  🔄 Updates: ${YELLOW}lovable-update${NC}"
   echo ""
 }
 
