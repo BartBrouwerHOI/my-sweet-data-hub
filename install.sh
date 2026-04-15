@@ -1097,21 +1097,27 @@ if [[ "\$APP_ONLY" == true ]]; then
   echo "[1/3] App-code ophalen van GitHub..."
   cd "\$APP_DIR" && git pull
 
-  # .env.production herschrijven met self-hosted waarden (met fallback)
-  _api_url=""
+  # --- Resolve env (key: supabase/.env is bron van waarheid) ---
   _anon_key=""
-  if [[ -f "\$INFRA_DIR/.app_env" ]]; then
-    source "\$INFRA_DIR/.app_env"
-    _api_url="\$APP_API_URL"
-    _anon_key="\$APP_ANON_KEY"
-  elif [[ -f "\$SUPABASE_DIR/.env" ]]; then
+  _api_url=""
+  if [[ -f "\$SUPABASE_DIR/.env" ]]; then
     _anon_key=\$(grep "^ANON_KEY=" "\$SUPABASE_DIR/.env" | cut -d= -f2-)
-    if [[ -f "\$INFRA_DIR/.app_domain" ]]; then
-      _api_url="https://\$(cat "\$INFRA_DIR/.app_domain")"
-    else
-      _api_url="http://\$(curl -sf ifconfig.me 2>/dev/null || echo localhost)"
+  fi
+  if [[ -z "\$_anon_key" ]] && [[ -f "\$INFRA_DIR/.app_env" ]]; then
+    source "\$INFRA_DIR/.app_env" 2>/dev/null || true
+    _anon_key="\${APP_ANON_KEY:-}"
+  fi
+  if [[ -f "\$INFRA_DIR/.app_domain" ]]; then
+    _dom=\$(cat "\$INFRA_DIR/.app_domain")
+    [[ ! "\$_dom" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && _api_url="https://\$_dom"
+  fi
+  if [[ -z "\$_api_url" ]] && [[ -f "\$INFRA_DIR/.app_env" ]]; then
+    source "\$INFRA_DIR/.app_env" 2>/dev/null || true
+    _api_url="\${APP_API_URL:-}"
+  fi
+  if [[ -z "\$_api_url" ]]; then
+    _api_url="http://\$(curl -sf ifconfig.me 2>/dev/null || echo localhost)"
     [[ ! "\$_api_url" =~ :[0-9]+$ ]] && _api_url="\${_api_url}:8000"
-    fi
   fi
   if [[ -n "\$_api_url" && -n "\$_anon_key" ]]; then
     cat > "\$APP_DIR/.env.production" <<_ENVEOF
@@ -1119,6 +1125,11 @@ VITE_SUPABASE_URL=\$_api_url
 VITE_SUPABASE_ANON_KEY=\$_anon_key
 VITE_SUPABASE_PUBLISHABLE_KEY=\$_anon_key
 _ENVEOF
+    cat > "\$INFRA_DIR/.app_env" <<_SYNCEOF
+APP_API_URL=\$_api_url
+APP_ANON_KEY=\$_anon_key
+_SYNCEOF
+    chmod 600 "\$INFRA_DIR/.app_env"
     echo "  .env.production → \$_api_url"
   else
     echo "  ⚠️  Kan .env.production niet schrijven — .app_env en supabase/.env ontbreken"
@@ -1164,21 +1175,27 @@ bash "\$INFRA_DIR/install.sh" --refresh-updater 2>/dev/null || true
 echo "[2/5] App-code ophalen van GitHub..."
 cd "\$APP_DIR" && git pull
 
-# .env.production herschrijven met self-hosted waarden (met fallback)
-_api_url=""
+# --- Resolve env (key: supabase/.env is bron van waarheid) ---
 _anon_key=""
-if [[ -f "\$INFRA_DIR/.app_env" ]]; then
-  source "\$INFRA_DIR/.app_env"
-  _api_url="\$APP_API_URL"
-  _anon_key="\$APP_ANON_KEY"
-elif [[ -f "\$SUPABASE_DIR/.env" ]]; then
+_api_url=""
+if [[ -f "\$SUPABASE_DIR/.env" ]]; then
   _anon_key=\$(grep "^ANON_KEY=" "\$SUPABASE_DIR/.env" | cut -d= -f2-)
-  if [[ -f "\$INFRA_DIR/.app_domain" ]]; then
-    _api_url="https://\$(cat "\$INFRA_DIR/.app_domain")"
-  else
-      _api_url="http://\$(curl -sf ifconfig.me 2>/dev/null || echo localhost)"
-    [[ ! "\$_api_url" =~ :[0-9]+$ ]] && _api_url="\${_api_url}:8000"
-  fi
+fi
+if [[ -z "\$_anon_key" ]] && [[ -f "\$INFRA_DIR/.app_env" ]]; then
+  source "\$INFRA_DIR/.app_env" 2>/dev/null || true
+  _anon_key="\${APP_ANON_KEY:-}"
+fi
+if [[ -f "\$INFRA_DIR/.app_domain" ]]; then
+  _dom=\$(cat "\$INFRA_DIR/.app_domain")
+  [[ ! "\$_dom" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && _api_url="https://\$_dom"
+fi
+if [[ -z "\$_api_url" ]] && [[ -f "\$INFRA_DIR/.app_env" ]]; then
+  source "\$INFRA_DIR/.app_env" 2>/dev/null || true
+  _api_url="\${APP_API_URL:-}"
+fi
+if [[ -z "\$_api_url" ]]; then
+  _api_url="http://\$(curl -sf ifconfig.me 2>/dev/null || echo localhost)"
+  [[ ! "\$_api_url" =~ :[0-9]+$ ]] && _api_url="\${_api_url}:8000"
 fi
 if [[ -n "\$_api_url" && -n "\$_anon_key" ]]; then
   cat > "\$APP_DIR/.env.production" <<_ENVEOF
@@ -1186,6 +1203,11 @@ VITE_SUPABASE_URL=\$_api_url
 VITE_SUPABASE_ANON_KEY=\$_anon_key
 VITE_SUPABASE_PUBLISHABLE_KEY=\$_anon_key
 _ENVEOF
+  cat > "\$INFRA_DIR/.app_env" <<_SYNCEOF
+APP_API_URL=\$_api_url
+APP_ANON_KEY=\$_anon_key
+_SYNCEOF
+  chmod 600 "\$INFRA_DIR/.app_env"
   echo "  .env.production → \$_api_url"
 else
   echo "  ⚠️  Kan .env.production niet schrijven — .app_env en supabase/.env ontbreken"
