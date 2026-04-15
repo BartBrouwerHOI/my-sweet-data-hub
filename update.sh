@@ -67,6 +67,19 @@ if [[ -n "$MARK_DONE" && "$MARK_DONE" != "next" ]]; then
   exit 0
 fi
 
+# --- .env.production herschrijven met self-hosted waarden ---
+write_env_production() {
+  if [[ -f "$INFRA_DIR/.app_env" ]]; then
+    source "$INFRA_DIR/.app_env"
+    cat > "$APP_DIR/.env.production" <<_ENVEOF
+VITE_SUPABASE_URL=$APP_API_URL
+VITE_SUPABASE_ANON_KEY=$APP_ANON_KEY
+VITE_SUPABASE_PUBLISHABLE_KEY=$APP_ANON_KEY
+_ENVEOF
+    echo "  .env.production bijgewerkt"
+  fi
+}
+
 # --- Strikte migratie-runner (gedeeld) ---
 run_strict_migrations() {
   if [[ ! -d "$APP_DIR/supabase/migrations" ]]; then return 0; fi
