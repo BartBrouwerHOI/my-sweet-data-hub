@@ -130,6 +130,16 @@ CLONE_FOR_MIGRATIONS=""
 IS_IP_ADDRESS=false
 PROTOCOL="https"
 
+# Voeg :8000 toe aan URL als er nog geen poort in zit
+ensure_kong_port() {
+  local url="$1"
+  if [[ "$url" =~ ://[^/]*:[0-9]+ ]]; then
+    echo "$url"
+  else
+    echo "${url%/}:8000"
+  fi
+}
+
 # --- Helper: detect if input is an IP address ---
 is_ip_address() {
   local input="$1"
@@ -382,7 +392,7 @@ setup_supabase() {
   if [[ -n "$DOMAIN" ]]; then
     api_url="${PROTOCOL}://$DOMAIN"
   else
-    api_url="http://$(curl -s ifconfig.me):8000"
+    api_url="$(ensure_kong_port "http://$(curl -s ifconfig.me)")"
   fi
 
   cat > "$SUPABASE_DIR/.env" <<ENVEOF
@@ -551,13 +561,13 @@ build_frontend() {
 
   local api_url anon_key
   if [[ "$INSTALL_MODE" == "frontend" ]]; then
-    api_url="http://$DB_SERVER_IP:8000"
+    api_url="$(ensure_kong_port "http://$DB_SERVER_IP")"
     anon_key="$DB_SERVER_ANON_KEY"
   else
     if [[ -n "$DOMAIN" ]]; then
       api_url="${PROTOCOL}://$DOMAIN"
     else
-      api_url="http://$(curl -s ifconfig.me):8000"
+      api_url="$(ensure_kong_port "http://$(curl -s ifconfig.me)")"
     fi
     anon_key="$ANON_KEY"
   fi
@@ -829,12 +839,14 @@ configure_firewall() {
     firewall-cmd --permanent --add-service=http
     firewall-cmd --permanent --add-service=https
 
-    if [[ "$INSTALL_MODE" == "database" ]]; then
-      log_info "Database-modus: poort 8000 (Kong) openzetten..."
+    if [[ "$INSTALL_MODE" == "database" ]] || { [[ "$INSTALL_MODE" == "full" ]] && [[ -z "$DOMAIN" || "$IS_IP_ADDRESS" == true ]]; }; then
+      log_info "Poort 8000 (Kong API gateway) openzetten..."
       firewall-cmd --permanent --add-port=8000/tcp
-      log_warn "Beperk poort 8000 tot je frontend-server IP voor betere beveiliging:"
-      log_warn "  firewall-cmd --permanent --remove-port=8000/tcp"
-      log_warn "  firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address=FRONTEND_IP port port=8000 protocol=tcp accept'"
+      if [[ "$INSTALL_MODE" == "database" ]]; then
+        log_warn "Beperk poort 8000 tot je frontend-server IP voor betere beveiliging:"
+        log_warn "  firewall-cmd --permanent --remove-port=8000/tcp"
+        log_warn "  firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address=FRONTEND_IP port port=8000 protocol=tcp accept'"
+      fi
     fi
 
     firewall-cmd --reload
@@ -844,11 +856,13 @@ configure_firewall() {
     ufw allow http
     ufw allow https
 
-    if [[ "$INSTALL_MODE" == "database" ]]; then
-      log_info "Database-modus: poort 8000 (Kong) openzetten..."
+    if [[ "$INSTALL_MODE" == "database" ]] || { [[ "$INSTALL_MODE" == "full" ]] && [[ -z "$DOMAIN" || "$IS_IP_ADDRESS" == true ]]; }; then
+      log_info "Poort 8000 (Kong API gateway) openzetten..."
       ufw allow 8000
-      log_warn "Beperk poort 8000 tot je frontend-server IP voor betere beveiliging:"
-      log_warn "  ufw delete allow 8000 && ufw allow from FRONTEND_IP to any port 8000"
+      if [[ "$INSTALL_MODE" == "database" ]]; then
+        log_warn "Beperk poort 8000 tot je frontend-server IP voor betere beveiliging:"
+        log_warn "  ufw delete allow 8000 && ufw allow from FRONTEND_IP to any port 8000"
+      fi
     fi
 
     ufw reload
@@ -993,7 +1007,8 @@ elif [[ -f "\$SUPABASE_DIR/.env" ]]; then
   if [[ -f "\$INFRA_DIR/.app_domain" ]]; then
     _api_url="https://\$(cat "\$INFRA_DIR/.app_domain")"
   else
-    _api_url="http://\$(curl -sf ifconfig.me 2>/dev/null || echo localhost):8000"
+    _api_url="http://\$(curl -sf ifconfig.me 2>/dev/null || echo localhost)"
+    [[ ! "\$_api_url" =~ :[0-9]+$ ]] && _api_url="\${_api_url}:8000"
   fi
 fi
 if [[ -n "\$_api_url" && -n "\$_anon_key" ]]; then
@@ -1080,7 +1095,8 @@ if [[ "\$APP_ONLY" == true ]]; then
     if [[ -f "\$INFRA_DIR/.app_domain" ]]; then
       _api_url="https://\$(cat "\$INFRA_DIR/.app_domain")"
     else
-      _api_url="http://\$(curl -sf ifconfig.me 2>/dev/null || echo localhost):8000"
+      _api_url="http://\$(curl -sf ifconfig.me 2>/dev/null || echo localhost)"
+    [[ ! "\$_api_url" =~ :[0-9]+$ ]] && _api_url="\${_api_url}:8000"
     fi
   fi
   if [[ -n "\$_api_url" && -n "\$_anon_key" ]]; then
@@ -1146,7 +1162,8 @@ elif [[ -f "\$SUPABASE_DIR/.env" ]]; then
   if [[ -f "\$INFRA_DIR/.app_domain" ]]; then
     _api_url="https://\$(cat "\$INFRA_DIR/.app_domain")"
   else
-    _api_url="http://\$(curl -sf ifconfig.me 2>/dev/null || echo localhost):8000"
+      _api_url="http://\$(curl -sf ifconfig.me 2>/dev/null || echo localhost)"
+    [[ ! "\$_api_url" =~ :[0-9]+$ ]] && _api_url="\${_api_url}:8000"
   fi
 fi
 if [[ -n "\$_api_url" && -n "\$_anon_key" ]]; then
