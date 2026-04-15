@@ -603,7 +603,7 @@ sudo lovable-update
 scp tabel.csv root@JOUW-SERVER-IP:/tmp/
 
 # Importeer in PostgreSQL (draai dit op de SERVER)
-cat /tmp/tabel.csv | docker exec -i supabase-db psql -U supabase -d postgres \\
+cat /tmp/tabel.csv | docker exec -i supabase-db psql -U postgres -d postgres \\
   -c "\\COPY public.tabel_naam FROM STDIN WITH CSV HEADER"`}</CodeBlock>
         <Tip>Het <InfoTooltip text="Bestanden kopiëren tussen je computer en een server via SSH — zoals slepen naar een USB-stick, maar dan over het netwerk." />-commando draai je op je eigen computer (niet op de server).</Tip>
         <Warn>Gebruikerswachtwoorden kunnen niet gemigreerd worden. Gebruikers moeten een wachtwoord-reset doen na migratie.</Warn>
@@ -724,13 +724,13 @@ sudo docker exec supabase-db bash -c 'PGPASSWORD=$POSTGRES_PASSWORD psql -U post
 sudo mkdir -p /opt/backups
 
 # Volledige backup
-sudo docker exec supabase-db pg_dump -U supabase postgres > /opt/backups/backup_$(date +%Y%m%d).sql
+sudo docker exec supabase-db pg_dump -U postgres postgres > /opt/backups/backup_$(date +%Y%m%d).sql
 
 # Backup met compressie (kleiner bestand)
-sudo docker exec supabase-db pg_dump -U supabase -Fc postgres > /opt/backups/backup_$(date +%Y%m%d).dump
+sudo docker exec supabase-db pg_dump -U postgres -Fc postgres > /opt/backups/backup_$(date +%Y%m%d).dump
 
 # Restore (terugzetten)
-sudo docker exec -i supabase-db psql -U supabase -d postgres < /opt/backups/backup_20240101.sql`}</CodeBlock>
+sudo docker exec -i supabase-db psql -U postgres -d postgres < /opt/backups/backup_20240101.sql`}</CodeBlock>
         </div>
 
         <div className="mt-4 rounded-lg border border-border bg-muted/30 p-4">
