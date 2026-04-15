@@ -930,6 +930,17 @@ bash "\$INFRA_DIR/install.sh" --refresh-updater 2>/dev/null || true
 
 echo "[2/3] App-code ophalen en bouwen (type: \$PROJECT_TYPE)..."
 cd "\$APP_DIR" && git pull
+
+# .env.production herschrijven met self-hosted waarden
+if [[ -f "\$INFRA_DIR/.app_env" ]]; then
+  source "\$INFRA_DIR/.app_env"
+  cat > "\$APP_DIR/.env.production" <<_ENVEOF
+VITE_SUPABASE_URL=\$APP_API_URL
+VITE_SUPABASE_ANON_KEY=\$APP_ANON_KEY
+VITE_SUPABASE_PUBLISHABLE_KEY=\$APP_ANON_KEY
+_ENVEOF
+  echo "  .env.production bijgewerkt"
+fi
 if [[ "\$PROJECT_TYPE" == "spa" ]]; then
   cp "\$INFRA_DIR/nginx/frontend-spa.conf" "\$APP_DIR/nginx.conf"
   docker build -t lovable-frontend -f "\$INFRA_DIR/Dockerfile.spa" "\$APP_DIR"
