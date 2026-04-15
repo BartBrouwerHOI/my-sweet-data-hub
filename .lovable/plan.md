@@ -1,52 +1,61 @@
 
 
-## Fix: Dubbele poort voorkomen + firewall regel voor full-modus
+## Diagnose & Fix: 3 problemen gevonden
 
-### Probleem
-1. **Dubbele `:8000`**: Als `.app_env` al `:8000` bevat en de updater/installer opnieuw `:8000` toevoegt, krijg je `http://IP:8000:8000`.
-2. **Firewall**: Poort 8000 wordt alleen geopend in `database`-modus, maar in `full`-modus zonder domein (IP-gebaseerd) moet de browser ook direct Kong bereiken op poort 8000.
+Uit de output blijkt:
+
+### Probleem 1: Kong weigert de anon key ("Invalid authentication credentials")
+GoTrue is gezond (200 OK), maar Kong weigert het request. Dit betekent dat de `ANON_KEY` waarmee de frontend is gebouwd **niet overeenkomt** met de key die Kong verwacht. De `.app_env` is onleesbaar (permission denied), dus `write_env_production()` valt terug op de fallback — maar de key uit `/opt/supabase/.env` zou wél kloppen. Vermoedelijk is `.app_env` ooit geschreven met een andere key, en de updater gebruikt die (met `source`) zonder te controleren of hij nog klopt.
+
+### Probleem 2: `.app_domain` bevat een IP-adres
+`.app_domain` bevat `192.168.200.185`. De updater-logica leest dit en maakt er `https://192.168.200.185` van (HTTPS op een kaal IP — werkt niet). Dit bestand hoort alleen een echt domein te bevatten, of niet te bestaan bij IP-installaties.
+
+### Probleem 3: Realtime crasht (`_realtime` schema ontbreekt)
+De `DB_AFTER_CONNECT_QUERY` is `SET search_path TO _realtime`, maar dat schema bestaat niet in de database. Dit moet aangemaakt worden via een init-script.
+
+---
 
 ### Wijzigingen
 
-**`install.sh` — nieuwe helper `ensure_kong_port()`** (bij de andere helpers bovenin):
-```bash
-ensure_kong_port() {
-  local url="$1"
-  if [[ "$url" =~ ://[^/]*:[0-9]+ ]]; then
-    echo "$url"
-  else
-    echo "${url%/}:8000"
-  fi
-}
-```
-Gebruik in `build_frontend()` regels 554 en 560:
-- `api_url="$(ensure_kong_port "http://$DB_SERVER_IP")"`
-- `api_url="$(ensure_kong_port "http://$(curl -s ifconfig.me)")"`
+**1. `update.sh` — `write_env_production()` robuuster maken**
 
-**`install.sh` — `configure_firewall()` (regel 832-852)**:
-Poort 8000 ook openen in `full`-modus wanneer er geen domein is (IP-gebaseerde installatie). Wijzig de `if`-conditie van alleen `database` naar `database` OF (`full` zonder domein):
+Nieuwe logica:
+- Altijd `ANON_KEY` uit `/opt/supabase/.env` als primaire bron (als die bestaat)
+- `.app_env` alleen als fallback, en alleen als keys overeenkomen
+- `.app_domain` alleen gebruiken als het GEEN IP-adres is
+- Als `.app_env` afwijkt van de werkelijke waarden: automatisch bijwerken
+
+**2. `install.sh` — `.app_domain` NIET schrijven bij IP-adressen**
+
+Regel 590-592: alleen schrijven als `$DOMAIN` geen IP is. Toevoegen:
 ```bash
-if [[ "$INSTALL_MODE" == "database" ]] || { [[ "$INSTALL_MODE" == "full" ]] && [[ -z "$DOMAIN" || "$IS_IP_ADDRESS" == true ]]; }; then
+if [[ -n "$DOMAIN" && ! "$DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 ```
 
-**`install.sh` — gegenereerde updater-templates (regels 996, 1083, 1149)**:
-Inline poort-check toevoegen zodat dubbele `:8000` niet kan:
-```bash
-_api_url="http://$(curl -sf ifconfig.me 2>/dev/null || echo localhost)"
-[[ ! "$_api_url" =~ :[0-9]+$ ]] && _api_url="${_api_url}:8000"
+Dezelfde check in alle gegenereerde updater-templates.
+
+**3. `volumes/db/roles.sql` — `_realtime` schema aanmaken**
+
+Toevoegen:
+```sql
+CREATE SCHEMA IF NOT EXISTS _realtime;
+GRANT ALL ON SCHEMA _realtime TO supabase_admin;
 ```
 
-**`update.sh` — `write_env_production()` fallback (regel 85)**:
-Zelfde inline check toevoegen:
-```bash
-api_url="http://$(curl -sf ifconfig.me 2>/dev/null || echo localhost)"
-[[ ! "$api_url" =~ :[0-9]+$ ]] && api_url="${api_url}:8000"
-```
+**4. Directe fix-instructies voor de server**
+
+Na de code-wijzigingen geef ik je commando's om:
+- `.app_domain` te verwijderen (bevat IP, niet nodig)
+- `.app_env` permissions te fixen
+- `_realtime` schema handmatig aan te maken in de draaiende database
+- Realtime container te herstarten
+- Frontend te rebuilden met correcte key
 
 ### Bestanden
 
 | Bestand | Wijziging |
 |---------|-----------|
-| `install.sh` | `ensure_kong_port()` helper + gebruik in `build_frontend()` + poort 8000 firewall in full-modus zonder domein + inline check in gegenereerde updater-templates |
-| `update.sh` | Inline poort-check in `write_env_production()` fallback |
+| `update.sh` | Key-validatie + `.app_domain` IP-check + auto-sync `.app_env` |
+| `install.sh` | `.app_domain` niet schrijven bij IP + zelfde logica in updater-templates |
+| `volumes/db/roles.sql` | `_realtime` schema aanmaken |
 
