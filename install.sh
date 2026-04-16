@@ -382,6 +382,29 @@ detect_project_type() {
   fi
 }
 
+# --- Render Kong declarative config met echte keys uit /opt/supabase/.env ---
+render_kong_config() {
+  local src="$INFRA_DIR/volumes/kong/kong.yml"
+  local dst="$SUPABASE_DIR/volumes/kong/kong.yml"
+  local anon="" service=""
+  if [[ -f "$SUPABASE_DIR/.env" ]]; then
+    anon=$(grep "^ANON_KEY=" "$SUPABASE_DIR/.env" | cut -d= -f2-)
+    service=$(grep "^SERVICE_ROLE_KEY=" "$SUPABASE_DIR/.env" | cut -d= -f2-)
+  fi
+  [[ -z "$anon" ]] && anon="${ANON_KEY:-}"
+  [[ -z "$service" ]] && service="${SERVICE_ROLE_KEY:-}"
+  if [[ -z "$anon" || -z "$service" ]]; then
+    echo "  ⚠️  Kong-config: kan ANON_KEY of SERVICE_ROLE_KEY niet vinden — placeholders blijven staan"
+    cp "$src" "$dst"
+    return 0
+  fi
+  mkdir -p "$(dirname "$dst")"
+  sed -e "s|\${SUPABASE_ANON_KEY}|$anon|g" \
+      -e "s|\${SUPABASE_SERVICE_KEY}|$service|g" \
+      "$src" > "$dst"
+  echo "  Kong-config gerenderd met echte keys → $dst"
+}
+
 # --- Setup Supabase (bestanden komen uit INFRA_DIR) ---
 setup_supabase() {
   log_info "Self-hosted Supabase configureren..."
