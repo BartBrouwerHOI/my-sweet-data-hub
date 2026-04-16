@@ -259,7 +259,10 @@ if [[ "$INSTALL_MODE" == "database" ]]; then
   fi
 
   echo -e "${GREEN}[4/4]${NC} Supabase stack herstarten..."
+  render_kong_config
   cd "$SUPABASE_DIR" && docker compose up -d
+  docker compose up -d --force-recreate kong >/dev/null 2>&1 || true
+  kong_health_check
 
   echo ""
   echo -e "${GREEN}✅ Update compleet (database)!${NC}"
