@@ -96,14 +96,12 @@ write_env_production() {
   fi
   if [[ -z "$api_url" ]]; then
     api_url="http://$(curl -sf ifconfig.me 2>/dev/null || echo localhost)"
-    [[ ! "$api_url" =~ :[0-9]+$ ]] && api_url="${api_url}:8000"
   fi
 
-  # --- Schrijf .env.production ---
+  # --- Schrijf .env.production (same-origin via Nginx, géén :8000) ---
   if [[ -n "$api_url" && -n "$anon_key" ]]; then
     cat > "$APP_DIR/.env.production" <<_ENVEOF
 VITE_SUPABASE_URL=$api_url
-VITE_SUPABASE_ANON_KEY=$anon_key
 VITE_SUPABASE_PUBLISHABLE_KEY=$anon_key
 _ENVEOF
     echo -e "  ${GREEN}.env.production → $api_url${NC}"

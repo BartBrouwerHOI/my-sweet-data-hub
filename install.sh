@@ -1085,12 +1085,10 @@ if [[ -z "\$_api_url" ]] && [[ -f "\$INFRA_DIR/.app_env" ]]; then
 fi
 if [[ -z "\$_api_url" ]]; then
   _api_url="http://\$(curl -sf ifconfig.me 2>/dev/null || echo localhost)"
-  [[ ! "\$_api_url" =~ :[0-9]+$ ]] && _api_url="\${_api_url}:8000"
 fi
 if [[ -n "\$_api_url" && -n "\$_anon_key" ]]; then
   cat > "\$APP_DIR/.env.production" <<_ENVEOF
 VITE_SUPABASE_URL=\$_api_url
-VITE_SUPABASE_ANON_KEY=\$_anon_key
 VITE_SUPABASE_PUBLISHABLE_KEY=\$_anon_key
 _ENVEOF
   # Auto-sync .app_env
@@ -1185,12 +1183,10 @@ if [[ "\$APP_ONLY" == true ]]; then
   fi
   if [[ -z "\$_api_url" ]]; then
     _api_url="http://\$(curl -sf ifconfig.me 2>/dev/null || echo localhost)"
-    [[ ! "\$_api_url" =~ :[0-9]+$ ]] && _api_url="\${_api_url}:8000"
   fi
   if [[ -n "\$_api_url" && -n "\$_anon_key" ]]; then
     cat > "\$APP_DIR/.env.production" <<_ENVEOF
 VITE_SUPABASE_URL=\$_api_url
-VITE_SUPABASE_ANON_KEY=\$_anon_key
 VITE_SUPABASE_PUBLISHABLE_KEY=\$_anon_key
 _ENVEOF
     cat > "\$INFRA_DIR/.app_env" <<_SYNCEOF
@@ -1263,12 +1259,10 @@ if [[ -z "\$_api_url" ]] && [[ -f "\$INFRA_DIR/.app_env" ]]; then
 fi
 if [[ -z "\$_api_url" ]]; then
   _api_url="http://\$(curl -sf ifconfig.me 2>/dev/null || echo localhost)"
-  [[ ! "\$_api_url" =~ :[0-9]+$ ]] && _api_url="\${_api_url}:8000"
 fi
 if [[ -n "\$_api_url" && -n "\$_anon_key" ]]; then
   cat > "\$APP_DIR/.env.production" <<_ENVEOF
 VITE_SUPABASE_URL=\$_api_url
-VITE_SUPABASE_ANON_KEY=\$_anon_key
 VITE_SUPABASE_PUBLISHABLE_KEY=\$_anon_key
 _ENVEOF
   cat > "\$INFRA_DIR/.app_env" <<_SYNCEOF
