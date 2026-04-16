@@ -394,5 +394,10 @@ else
   run_strict_migrations || exit 1
 fi
 
+# Kong-config opnieuw renderen + recreate (voor het geval infra-update kong.yml wijzigde)
+render_kong_config
+(cd "$SUPABASE_DIR" && docker compose up -d --force-recreate kong >/dev/null 2>&1) || true
+kong_health_check
+
 echo ""
 echo -e "${GREEN}✅ Update compleet!${NC}"
