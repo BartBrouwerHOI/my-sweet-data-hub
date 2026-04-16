@@ -94,5 +94,7 @@ Dit project bevat een uitgebreide interactieve handleiding op `/handleiding` met
 | `Dockerfile.spa` | Build template voor SPA projecten |
 | `Dockerfile.ssr` | Build template voor SSR projecten |
 | `docker-compose.yml` | Self-hosted Supabase stack |
-| `volumes/kong/kong.yml` | API gateway template — wordt op de server gerenderd met echte keys uit `/opt/supabase/.env` (geen Kong-side env-substitutie) |
-| `nginx/frontend-spa.conf` | Nginx config voor SPA (in container) |
+| `volumes/kong/kong.yml` | API gateway template — wordt op de server gerenderd met echte keys uit `/opt/supabase/.env` |
+| `nginx/frontend-spa.conf` | Nginx config voor SPA (in container, port 3000) |
+
+> **Routing:** Host-Nginx (port 80) proxyt API-routes (`/auth/v1/`, `/rest/v1/`, `/storage/v1/`, `/realtime/v1/`, `/functions/v1/`) naar Kong (`127.0.0.1:8000`) en de rest naar de frontend-container (`127.0.0.1:3000`). De app gebruikt daarom `VITE_SUPABASE_URL=http://<DOMAIN_OR_IP>` (same-origin, zonder `:8000`).
