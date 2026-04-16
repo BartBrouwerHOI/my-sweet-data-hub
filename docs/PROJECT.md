@@ -86,7 +86,7 @@ Browser → Nginx (SSL/443)
 
 | Bestand | Doel |
 |---------|------|
-| `volumes/kong/kong.yml` | Kong API Gateway routes + JWT validatie |
+| `volumes/kong/kong.yml` | Kong API Gateway template — `install.sh` en `update.sh` renderen dit op de server door `${SUPABASE_ANON_KEY}` en `${SUPABASE_SERVICE_KEY}` te vervangen met `sed` (Kong doet zelf geen env-substitutie in declarative config) |
 | `nginx/frontend-spa.conf` | Nginx config voor SPA container (gzip, fallback naar index.html) |
 
 ### Website (dit project IS ook een website)

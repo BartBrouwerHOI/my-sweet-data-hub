@@ -94,5 +94,5 @@ Dit project bevat een uitgebreide interactieve handleiding op `/handleiding` met
 | `Dockerfile.spa` | Build template voor SPA projecten |
 | `Dockerfile.ssr` | Build template voor SSR projecten |
 | `docker-compose.yml` | Self-hosted Supabase stack |
-| `volumes/kong/kong.yml` | API gateway configuratie |
+| `volumes/kong/kong.yml` | API gateway template — wordt op de server gerenderd met echte keys uit `/opt/supabase/.env` (geen Kong-side env-substitutie) |
 | `nginx/frontend-spa.conf` | Nginx config voor SPA (in container) |

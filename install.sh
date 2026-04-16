@@ -382,6 +382,29 @@ detect_project_type() {
   fi
 }
 
+# --- Render Kong declarative config met echte keys uit /opt/supabase/.env ---
+render_kong_config() {
+  local src="$INFRA_DIR/volumes/kong/kong.yml"
+  local dst="$SUPABASE_DIR/volumes/kong/kong.yml"
+  local anon="" service=""
+  if [[ -f "$SUPABASE_DIR/.env" ]]; then
+    anon=$(grep "^ANON_KEY=" "$SUPABASE_DIR/.env" | cut -d= -f2-)
+    service=$(grep "^SERVICE_ROLE_KEY=" "$SUPABASE_DIR/.env" | cut -d= -f2-)
+  fi
+  [[ -z "$anon" ]] && anon="${ANON_KEY:-}"
+  [[ -z "$service" ]] && service="${SERVICE_ROLE_KEY:-}"
+  if [[ -z "$anon" || -z "$service" ]]; then
+    echo "  ⚠️  Kong-config: kan ANON_KEY of SERVICE_ROLE_KEY niet vinden — placeholders blijven staan"
+    cp "$src" "$dst"
+    return 0
+  fi
+  mkdir -p "$(dirname "$dst")"
+  sed -e "s|\${SUPABASE_ANON_KEY}|$anon|g" \
+      -e "s|\${SUPABASE_SERVICE_KEY}|$service|g" \
+      "$src" > "$dst"
+  echo "  Kong-config gerenderd met echte keys → $dst"
+}
+
 # --- Setup Supabase (bestanden komen uit INFRA_DIR) ---
 setup_supabase() {
   log_info "Self-hosted Supabase configureren..."
@@ -434,7 +457,7 @@ ENVEOF
   mkdir -p "$SUPABASE_DIR/volumes/kong"
 
   if [[ -f "$INFRA_DIR/volumes/kong/kong.yml" ]]; then
-    cp "$INFRA_DIR/volumes/kong/kong.yml" "$SUPABASE_DIR/volumes/kong/kong.yml"
+    render_kong_config
   fi
 
   # Kopieer roles.sql en jwt.sql (wachtwoorden voor service-rollen + JWT config)
@@ -647,6 +670,7 @@ start_supabase() {
 
   log_info "Supabase services starten..."
   cd "$SUPABASE_DIR"
+  render_kong_config
   docker compose up -d || true
 
   log_info "Wachten tot database klaar is..."
@@ -971,7 +995,25 @@ if [[ -d "\$APP_DIR/supabase/migrations" ]]; then
 fi
 
 echo "[4/4] Supabase stack herstarten..."
+# Render Kong-config met echte keys uit \$SUPABASE_DIR/.env
+if [[ -f "\$INFRA_DIR/volumes/kong/kong.yml" && -f "\$SUPABASE_DIR/.env" ]]; then
+  _kong_anon=\$(grep "^ANON_KEY=" "\$SUPABASE_DIR/.env" | cut -d= -f2-)
+  _kong_svc=\$(grep "^SERVICE_ROLE_KEY=" "\$SUPABASE_DIR/.env" | cut -d= -f2-)
+  if [[ -n "\$_kong_anon" && -n "\$_kong_svc" ]]; then
+    mkdir -p "\$SUPABASE_DIR/volumes/kong"
+    sed -e "s|\\\${SUPABASE_ANON_KEY}|\$_kong_anon|g" \\
+        -e "s|\\\${SUPABASE_SERVICE_KEY}|\$_kong_svc|g" \\
+        "\$INFRA_DIR/volumes/kong/kong.yml" > "\$SUPABASE_DIR/volumes/kong/kong.yml"
+    echo "  Kong-config gerenderd"
+  fi
+fi
 cd "\$SUPABASE_DIR" && docker compose up -d
+docker compose up -d --force-recreate kong >/dev/null 2>&1 || true
+# Health-check
+if [[ -n "\${_kong_anon:-}" ]]; then
+  _hc=\$(curl -s -o /dev/null -w "%{http_code}" -H "apikey: \$_kong_anon" http://localhost:8000/auth/v1/health 2>/dev/null || echo "000")
+  [[ "\$_hc" != "200" ]] && echo "  ⚠️  Kong health-check gaf HTTP \$_hc (verwacht 200)"
+fi
 
 echo ""
 echo "✅ Update compleet!"
@@ -1279,6 +1321,22 @@ else
         fi
       fi
     done
+  fi
+fi
+
+# --- Kong-config opnieuw renderen + recreate (voor het geval infra-update kong.yml wijzigde) ---
+if [[ -f "\$INFRA_DIR/volumes/kong/kong.yml" && -f "\$SUPABASE_DIR/.env" ]]; then
+  _kong_anon=\$(grep "^ANON_KEY=" "\$SUPABASE_DIR/.env" | cut -d= -f2-)
+  _kong_svc=\$(grep "^SERVICE_ROLE_KEY=" "\$SUPABASE_DIR/.env" | cut -d= -f2-)
+  if [[ -n "\$_kong_anon" && -n "\$_kong_svc" ]]; then
+    mkdir -p "\$SUPABASE_DIR/volumes/kong"
+    sed -e "s|\\\${SUPABASE_ANON_KEY}|\$_kong_anon|g" \\
+        -e "s|\\\${SUPABASE_SERVICE_KEY}|\$_kong_svc|g" \\
+        "\$INFRA_DIR/volumes/kong/kong.yml" > "\$SUPABASE_DIR/volumes/kong/kong.yml"
+    echo "  Kong-config gerenderd"
+    (cd "\$SUPABASE_DIR" && docker compose up -d --force-recreate kong >/dev/null 2>&1) || true
+    _hc=\$(curl -s -o /dev/null -w "%{http_code}" -H "apikey: \$_kong_anon" http://localhost:8000/auth/v1/health 2>/dev/null || echo "000")
+    [[ "\$_hc" != "200" ]] && echo "  ⚠️  Kong health-check gaf HTTP \$_hc (verwacht 200)"
   fi
 fi
 
