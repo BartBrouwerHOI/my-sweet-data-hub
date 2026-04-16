@@ -119,6 +119,40 @@ _SYNCEOF
   fi
 }
 
+# --- Render Kong declarative config met echte keys uit /opt/supabase/.env ---
+render_kong_config() {
+  local src="$INFRA_DIR/volumes/kong/kong.yml"
+  local dst="$SUPABASE_DIR/volumes/kong/kong.yml"
+  [[ -f "$src" && -f "$SUPABASE_DIR/.env" ]] || return 0
+  local anon service
+  anon=$(grep "^ANON_KEY=" "$SUPABASE_DIR/.env" | cut -d= -f2-)
+  service=$(grep "^SERVICE_ROLE_KEY=" "$SUPABASE_DIR/.env" | cut -d= -f2-)
+  if [[ -z "$anon" || -z "$service" ]]; then
+    echo -e "  ${YELLOW}⚠️  Kong-config: ANON_KEY/SERVICE_ROLE_KEY niet gevonden — overgeslagen${NC}"
+    return 0
+  fi
+  mkdir -p "$(dirname "$dst")"
+  sed -e "s|\${SUPABASE_ANON_KEY}|$anon|g" \
+      -e "s|\${SUPABASE_SERVICE_KEY}|$service|g" \
+      "$src" > "$dst"
+  echo -e "  ${GREEN}Kong-config gerenderd met echte keys${NC}"
+}
+
+# --- Health-check tegen Kong /auth/v1/health ---
+kong_health_check() {
+  [[ -f "$SUPABASE_DIR/.env" ]] || return 0
+  local anon
+  anon=$(grep "^ANON_KEY=" "$SUPABASE_DIR/.env" | cut -d= -f2-)
+  [[ -z "$anon" ]] && return 0
+  local code
+  code=$(curl -s -o /dev/null -w "%{http_code}" -H "apikey: $anon" http://localhost:8000/auth/v1/health 2>/dev/null || echo "000")
+  if [[ "$code" == "200" ]]; then
+    echo -e "  ${GREEN}Kong health-check: OK${NC}"
+  else
+    echo -e "  ${YELLOW}⚠️  Kong health-check gaf HTTP $code (verwacht 200)${NC}"
+  fi
+}
+
 # --- Patch known problematic migrations before running ---
 patch_known_migrations() {
   local target="$APP_DIR/supabase/migrations/20260119083612_fc4680d3-4321-408e-ac77-817040a08a81.sql"
