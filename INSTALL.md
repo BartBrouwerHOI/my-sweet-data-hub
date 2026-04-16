@@ -77,6 +77,22 @@ sudo bash /opt/lovable-infra/install.sh --refresh-updater
 | `lovable-update --mark-done <file>` | Markeer een migratie als uitgevoerd zonder deze te draaien |
 | `install.sh --refresh-updater` | Vernieuw het `lovable-update` commando zonder herinstallatie |
 
+## Edge Functions (app-specifiek)
+
+Onze installer is **generiek** — hij zet Postgres, Auth, Kong, Storage en Realtime neer voor élk Lovable-project. **Edge functions** zijn app-specifiek (eigen secrets, eigen routes, eigen deploy-logica) en horen daarom in de **app-repo** zelf.
+
+Als je app een `supabase/functions/` map bevat, detecteert `install.sh` dat aan het eind en toont de 2 commando's die je moet draaien om ze te activeren. Voor Access-Guardian zijn dat:
+
+```bash
+# 1. Voegt edge-runtime container + Kong-route + secrets toe
+curl -fsSL https://raw.githubusercontent.com/BartBrouwerHOI/Access-Guardian/main/scripts/bootstrap.sh | sudo bash
+
+# 2. Sync't de functions code en herstart de runtime
+sudo bash /opt/lovable-app/scripts/lovable-update.sh
+```
+
+Bij toekomstige function-wijzigingen draai je alleen het tweede commando opnieuw — de infra blijft staan.
+
 ## Interactieve Handleiding
 
 Dit project bevat een uitgebreide interactieve handleiding op `/handleiding` met:

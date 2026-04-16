@@ -1429,6 +1429,23 @@ print_summary() {
   fi
   echo -e "  🔄 Updates: ${YELLOW}lovable-update${NC}"
   echo ""
+
+  # --- Edge functions detectie ---
+  if [[ -d "$APP_DIR/supabase/functions" ]] && [[ "$INSTALL_MODE" != "database" ]]; then
+    echo -e "${YELLOW}╔══════════════════════════════════════════════╗${NC}"
+    echo -e "${YELLOW}║  ⚡ Edge Functions gedetecteerd in je app    ║${NC}"
+    echo -e "${YELLOW}╚══════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo "  Je app bevat edge functions in supabase/functions/."
+    echo "  Onze installer regelt de basis-infra; de app-repo levert zijn"
+    echo "  eigen deploy-scripts (met app-specifieke secrets en routes)."
+    echo ""
+    echo "  Draai deze 2 commando's om de functions te activeren:"
+    echo ""
+    echo -e "    ${GREEN}curl -fsSL https://raw.githubusercontent.com/BartBrouwerHOI/Access-Guardian/main/scripts/bootstrap.sh | sudo bash${NC}"
+    echo -e "    ${GREEN}sudo bash $APP_DIR/scripts/lovable-update.sh${NC}"
+    echo ""
+  fi
 }
 
 # --- Refresh updater (re-generate /usr/local/bin/lovable-update from current config) ---
