@@ -434,7 +434,7 @@ ENVEOF
   mkdir -p "$SUPABASE_DIR/volumes/kong"
 
   if [[ -f "$INFRA_DIR/volumes/kong/kong.yml" ]]; then
-    cp "$INFRA_DIR/volumes/kong/kong.yml" "$SUPABASE_DIR/volumes/kong/kong.yml"
+    render_kong_config
   fi
 
   # Kopieer roles.sql en jwt.sql (wachtwoorden voor service-rollen + JWT config)
