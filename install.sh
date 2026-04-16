@@ -510,25 +510,8 @@ wait_for_bootstrap() {
   return 1
 }
 
-# --- Patch known problematic migrations before running ---
-patch_known_migrations() {
-  local target="$APP_DIR/supabase/migrations/20260119083612_fc4680d3-4321-408e-ac77-817040a08a81.sql"
-  if [[ ! -f "$target" ]]; then
-    echo "  Migratie-patch: doelbestand niet gevonden (overgeslagen)"
-    return 0
-  fi
-  if grep -q "WHERE EXISTS" "$target"; then
-    echo "  Migratie-patch: al gepatcht (overgeslagen)"
-    return 0
-  fi
-  if ! grep -q "fa761b51-9489-4289-917b-d1818f3cd508" "$target"; then
-    echo "  Migratie-patch: UUID niet gevonden in doelbestand (overgeslagen)"
-    return 0
-  fi
-  echo "  Migratie-patch: conditionele super_admin INSERT toepassen..."
-  perl -0777 -i -pe "s/INSERT INTO user_roles \(user_id, role\)[\s\S]*?VALUES[\s\S]*?\('fa761b51-9489-4289-917b-d1818f3cd508'[\s\S]*?;/INSERT INTO user_roles (user_id, role)\nSELECT 'fa761b51-9489-4289-917b-d1818f3cd508', 'super_admin'::app_role\nWHERE EXISTS (\n  SELECT 1 FROM public.profiles\n  WHERE id = 'fa761b51-9489-4289-917b-d1818f3cd508'\n)\nON CONFLICT (user_id, role) DO NOTHING;/" "$target"
-  echo "  Migratie-patch: ✅ toegepast"
-}
+# (Generieke installer — geen app-specifieke migratie-patches.
+#  App-specifieke fixes horen in de app-repo zelf.)
 
 # --- Run migrations after Supabase is healthy ---
 run_migrations() {
@@ -972,25 +955,7 @@ else
   echo "  ⚠ App-repo niet gevonden in \$APP_DIR — migraties overgeslagen"
 fi
 
-# --- Patch known problematic migrations ---
-_patch_target="\$APP_DIR/supabase/migrations/20260119083612_fc4680d3-4321-408e-ac77-817040a08a81.sql"
-if [[ -f "\$_patch_target" ]]; then
-  if grep -q "WHERE EXISTS" "\$_patch_target"; then
-    echo "  Migratie-patch: al gepatcht (overgeslagen)"
-  elif ! grep -q "fa761b51-9489-4289-917b-d1818f3cd508" "\$_patch_target"; then
-    echo "  Migratie-patch: UUID niet gevonden (overgeslagen)"
-  else
-    echo "  Migratie-patch: conditionele super_admin INSERT toepassen..."
-    perl -0777 -i -pe "s/INSERT INTO user_roles \\(user_id, role\\)[\\s\\S]*?VALUES[\\s\\S]*?\\('fa761b51-9489-4289-917b-d1818f3cd508'[\\s\\S]*?;/INSERT INTO user_roles (user_id, role)\\nSELECT 'fa761b51-9489-4289-917b-d1818f3cd508', 'super_admin'::app_role\\nWHERE EXISTS (\\n  SELECT 1 FROM public.profiles\\n  WHERE id = 'fa761b51-9489-4289-917b-d1818f3cd508'\\n)\\nON CONFLICT (user_id, role) DO NOTHING;/" "\$_patch_target"
-    if grep -q "WHERE EXISTS" "\$_patch_target"; then
-      echo "  Migratie-patch: ✅ toegepast"
-    else
-      echo "  Migratie-patch: ⚠️ patroon niet vervangen — controleer het bestand handmatig"
-    fi
-  fi
-else
-  echo "  Migratie-patch: doelbestand niet gevonden (overgeslagen)"
-fi
+# (Generieke updater — geen app-specifieke migratie-patches.)
 
 echo "[3/4] Database migraties controleren..."
 mkdir -p "\$MIGRATIONS_DONE_DIR"
@@ -1295,25 +1260,7 @@ docker run -d \\
 if [[ "\$SKIP_MIGRATIONS" == true ]]; then
   echo "[5/5] Database migraties overgeslagen (--skip-migrations)"
 else
-  # --- Patch known problematic migrations ---
-  _patch_target="\$APP_DIR/supabase/migrations/20260119083612_fc4680d3-4321-408e-ac77-817040a08a81.sql"
-  if [[ -f "\$_patch_target" ]]; then
-    if grep -q "WHERE EXISTS" "\$_patch_target"; then
-      echo "  Migratie-patch: al gepatcht (overgeslagen)"
-    elif ! grep -q "fa761b51-9489-4289-917b-d1818f3cd508" "\$_patch_target"; then
-      echo "  Migratie-patch: UUID niet gevonden (overgeslagen)"
-    else
-      echo "  Migratie-patch: conditionele super_admin INSERT toepassen..."
-      perl -0777 -i -pe "s/INSERT INTO user_roles \\(user_id, role\\)[\\s\\S]*?VALUES[\\s\\S]*?\\('fa761b51-9489-4289-917b-d1818f3cd508'[\\s\\S]*?;/INSERT INTO user_roles (user_id, role)\\nSELECT 'fa761b51-9489-4289-917b-d1818f3cd508', 'super_admin'::app_role\\nWHERE EXISTS (\\n  SELECT 1 FROM public.profiles\\n  WHERE id = 'fa761b51-9489-4289-917b-d1818f3cd508'\\n)\\nON CONFLICT (user_id, role) DO NOTHING;/" "\$_patch_target"
-      if grep -q "WHERE EXISTS" "\$_patch_target"; then
-        echo "  Migratie-patch: ✅ toegepast"
-      else
-        echo "  Migratie-patch: ⚠️ patroon niet vervangen — controleer het bestand handmatig"
-      fi
-    fi
-  else
-    echo "  Migratie-patch: doelbestand niet gevonden (overgeslagen)"
-  fi
+  # (Generieke updater — geen app-specifieke migratie-patches.)
 
   echo "[5/5] Database migraties controleren..."
   mkdir -p "\$MIGRATIONS_DONE_DIR"
@@ -1508,17 +1455,11 @@ main() {
       setup_supabase
       build_frontend
       start_supabase
-      patch_known_migrations
       if ! run_migrations; then
         migration_failed=true
-      fi
-      start_frontend
-      ;;
-    database)
-      generate_secrets
+...
       setup_supabase
       start_supabase
-      patch_known_migrations
       if ! run_migrations; then
         migration_failed=true
       fi
