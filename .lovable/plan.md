@@ -1,61 +1,47 @@
 
 
-## Diagnose & Fix: 3 problemen gevonden
+## Wat klopt nog niet
 
-Uit de output blijkt:
+- `install.sh` regel 437 kopieert `volumes/kong/kong.yml` letterlijk → placeholders `${SUPABASE_ANON_KEY}` en `${SUPABASE_SERVICE_KEY}` blijven staan.
+- `update.sh` rendert Kong niet (0 hits op `kong`/`envsubst`).
+- De gegenereerde `lovable-update`-templates in `install.sh` (regels ~1001–1208) doen het ook niet.
+- Resultaat: een verse installatie via deze infra-handleiding loopt opnieuw tegen "Invalid authentication credentials" aan, totdat de app-repo bootstrap toevallig de Kong-config repareert.
 
-### Probleem 1: Kong weigert de anon key ("Invalid authentication credentials")
-GoTrue is gezond (200 OK), maar Kong weigert het request. Dit betekent dat de `ANON_KEY` waarmee de frontend is gebouwd **niet overeenkomt** met de key die Kong verwacht. De `.app_env` is onleesbaar (permission denied), dus `write_env_production()` valt terug op de fallback — maar de key uit `/opt/supabase/.env` zou wél kloppen. Vermoedelijk is `.app_env` ooit geschreven met een andere key, en de updater gebruikt die (met `source`) zonder te controleren of hij nog klopt.
+## Plan: Kong-rendering in de infra zelf
 
-### Probleem 2: `.app_domain` bevat een IP-adres
-`.app_domain` bevat `192.168.200.185`. De updater-logica leest dit en maakt er `https://192.168.200.185` van (HTTPS op een kaal IP — werkt niet). Dit bestand hoort alleen een echt domein te bevatten, of niet te bestaan bij IP-installaties.
+### 1. `install.sh` — `render_kong_config()` toevoegen
+- Nieuwe functie die `$SUPABASE_DIR/volumes/kong/kong.yml` overschrijft door `$INFRA_DIR/volumes/kong/kong.yml` te lezen en `${SUPABASE_ANON_KEY}` / `${SUPABASE_SERVICE_KEY}` te vervangen met `sed`, met waarden uit `$SUPABASE_DIR/.env` (fallback: in-memory `$ANON_KEY` / `$SERVICE_ROLE_KEY` die install.sh genereert).
+- Aanroepen vlak na regel 437 (eerste install) zodat Kong meteen met echte keys start.
 
-### Probleem 3: Realtime crasht (`_realtime` schema ontbreekt)
-De `DB_AFTER_CONNECT_QUERY` is `SET search_path TO _realtime`, maar dat schema bestaat niet in de database. Dit moet aangemaakt worden via een init-script.
+### 2. `update.sh` — zelfde rendering vóór elke restart
+- Voeg `render_kong_config()` toe (gedeelde helper-stijl).
+- Aanroepen in:
+  - `database` mode vóór `docker compose up -d`
+  - `full` mode vóór `docker compose up -d` (als die call ontbreekt: toevoegen na rendering)
+- `frontend` / `--app-only` blijven ongewijzigd (raken Kong niet).
 
----
+### 3. Gegenereerde updater-templates in `install.sh`
+- Dezelfde rendering-snippet inbakken in de heredocs rond regels 1001, 1101 en 1179, zodat `lovable-update` na elke `git pull` van de infra-repo de Kong-config altijd opnieuw rendert.
 
-### Wijzigingen
+### 4. Veiligheids-check (klein)
+- Na render in `update.sh`: korte health-check  
+  `curl -s -o /dev/null -w "%{http_code}" -H "apikey: $ANON_KEY" http://localhost:8000/auth/v1/health`  
+  → bij ≠ 200 een waarschuwing tonen (niet falen).
 
-**1. `update.sh` — `write_env_production()` robuuster maken**
-
-Nieuwe logica:
-- Altijd `ANON_KEY` uit `/opt/supabase/.env` als primaire bron (als die bestaat)
-- `.app_env` alleen als fallback, en alleen als keys overeenkomen
-- `.app_domain` alleen gebruiken als het GEEN IP-adres is
-- Als `.app_env` afwijkt van de werkelijke waarden: automatisch bijwerken
-
-**2. `install.sh` — `.app_domain` NIET schrijven bij IP-adressen**
-
-Regel 590-592: alleen schrijven als `$DOMAIN` geen IP is. Toevoegen:
-```bash
-if [[ -n "$DOMAIN" && ! "$DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-```
-
-Dezelfde check in alle gegenereerde updater-templates.
-
-**3. `volumes/db/roles.sql` — `_realtime` schema aanmaken**
-
-Toevoegen:
-```sql
-CREATE SCHEMA IF NOT EXISTS _realtime;
-GRANT ALL ON SCHEMA _realtime TO supabase_admin;
-```
-
-**4. Directe fix-instructies voor de server**
-
-Na de code-wijzigingen geef ik je commando's om:
-- `.app_domain` te verwijderen (bevat IP, niet nodig)
-- `.app_env` permissions te fixen
-- `_realtime` schema handmatig aan te maken in de draaiende database
-- Realtime container te herstarten
-- Frontend te rebuilden met correcte key
+### 5. Documentatie
+- Korte regel toevoegen in `INSTALL.md` en `docs/PROJECT.md`: "Kong-config wordt op de server gerenderd uit `volumes/kong/kong.yml` met keys uit `/opt/supabase/.env`."
+- Memory `mem://reference/project-context` updaten met deze beslissing.
 
 ### Bestanden
 
 | Bestand | Wijziging |
 |---------|-----------|
-| `update.sh` | Key-validatie + `.app_domain` IP-check + auto-sync `.app_env` |
-| `install.sh` | `.app_domain` niet schrijven bij IP + zelfde logica in updater-templates |
-| `volumes/db/roles.sql` | `_realtime` schema aanmaken |
+| `install.sh` | `render_kong_config()` toevoegen + aanroepen na regel 437; zelfde snippet in 3 updater-heredocs |
+| `update.sh` | `render_kong_config()` toevoegen + aanroepen in `database` en `full` mode + health-check |
+| `INSTALL.md` | Korte uitleg over Kong-rendering |
+| `docs/PROJECT.md` | Idem |
+| `mem://reference/project-context` | Beslissing vastleggen |
+
+### Resultaat
+Na deze wijziging is één commando (`install.sh` → bij update `lovable-update`) genoeg. De Access-Guardian `bootstrap.sh` blijft werken als extra vangnet maar is niet meer nodig om Kong werkend te krijgen.
 
