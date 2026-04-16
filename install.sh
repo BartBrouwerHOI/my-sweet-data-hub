@@ -584,21 +584,25 @@ build_frontend() {
 
   local api_url anon_key
   if [[ "$INSTALL_MODE" == "frontend" ]]; then
-    api_url="$(ensure_kong_port "http://$DB_SERVER_IP")"
+    # Frontend-only: API loopt via host-Nginx (same-origin), die proxyt naar de DB-server's Kong
+    if [[ -n "$DOMAIN" ]]; then
+      api_url="${PROTOCOL}://$DOMAIN"
+    else
+      api_url="http://$(curl -s ifconfig.me)"
+    fi
     anon_key="$DB_SERVER_ANON_KEY"
   else
     if [[ -n "$DOMAIN" ]]; then
       api_url="${PROTOCOL}://$DOMAIN"
     else
-      api_url="$(ensure_kong_port "http://$(curl -s ifconfig.me)")"
+      api_url="http://$(curl -s ifconfig.me)"
     fi
     anon_key="$ANON_KEY"
   fi
 
-  # .env.production schrijven in de app-directory (beide variabelenamen voor compatibiliteit)
+  # .env.production: same-origin via Nginx (géén :8000), alleen PUBLISHABLE_KEY (wat de app verwacht)
   cat > "$APP_DIR/.env.production" <<ENVEOF
 VITE_SUPABASE_URL=$api_url
-VITE_SUPABASE_ANON_KEY=$anon_key
 VITE_SUPABASE_PUBLISHABLE_KEY=$anon_key
 ENVEOF
 
@@ -727,38 +731,49 @@ server {
     server_name $server_name;
     client_max_body_size 100M;
 
-    location / {
-        proxy_pass http://127.0.0.1:3000;
+    location /auth/v1/ {
+        proxy_pass http://$DB_SERVER_IP:8000/auth/v1/;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
     }
 
-    location /auth/ {
-        proxy_pass http://$DB_SERVER_IP:8000/auth/v1/;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-    }
-
-    location /rest/ {
+    location /rest/v1/ {
         proxy_pass http://$DB_SERVER_IP:8000/rest/v1/;
         proxy_set_header Host \$host;
         proxy_set_header Authorization \$http_authorization;
         proxy_set_header apikey \$http_apikey;
     }
 
-    location /storage/ {
+    location /storage/v1/ {
         proxy_pass http://$DB_SERVER_IP:8000/storage/v1/;
         proxy_set_header Host \$host;
+        proxy_set_header Authorization \$http_authorization;
+        proxy_set_header apikey \$http_apikey;
     }
 
-    location /realtime/ {
+    location /functions/v1/ {
+        proxy_pass http://$DB_SERVER_IP:8000/functions/v1/;
+        proxy_set_header Host \$host;
+        proxy_set_header Authorization \$http_authorization;
+        proxy_set_header apikey \$http_apikey;
+    }
+
+    location /realtime/v1/ {
         proxy_pass http://$DB_SERVER_IP:8000/realtime/v1/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host \$host;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
     }
 }
 NGINXEOF
@@ -782,6 +797,48 @@ server {
     server_name $server_name;
     client_max_body_size 100M;
 
+    location /auth/v1/ {
+        proxy_pass http://127.0.0.1:8000/auth/v1/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    location /rest/v1/ {
+        proxy_pass http://127.0.0.1:8000/rest/v1/;
+        proxy_set_header Host \$host;
+        proxy_set_header Authorization \$http_authorization;
+        proxy_set_header apikey \$http_apikey;
+    }
+
+    location /storage/v1/ {
+        proxy_pass http://127.0.0.1:8000/storage/v1/;
+        proxy_set_header Host \$host;
+        proxy_set_header Authorization \$http_authorization;
+        proxy_set_header apikey \$http_apikey;
+    }
+
+    location /functions/v1/ {
+        proxy_pass http://127.0.0.1:8000/functions/v1/;
+        proxy_set_header Host \$host;
+        proxy_set_header Authorization \$http_authorization;
+        proxy_set_header apikey \$http_apikey;
+    }
+
+    location /realtime/v1/ {
+        proxy_pass http://127.0.0.1:8000/realtime/v1/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+    }
+
+    location /studio/ {
+        proxy_pass http://127.0.0.1:8080/;
+        proxy_set_header Host \$host;
+    }
+
     location / {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
@@ -791,37 +848,6 @@ server {
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
-    }
-
-    location /auth/ {
-        proxy_pass http://127.0.0.1:8000/auth/v1/;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-    }
-
-    location /rest/ {
-        proxy_pass http://127.0.0.1:8000/rest/v1/;
-        proxy_set_header Host \$host;
-        proxy_set_header Authorization \$http_authorization;
-        proxy_set_header apikey \$http_apikey;
-    }
-
-    location /realtime/ {
-        proxy_pass http://127.0.0.1:8000/realtime/v1/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-    }
-
-    location /storage/ {
-        proxy_pass http://127.0.0.1:8000/storage/v1/;
-        proxy_set_header Host \$host;
-    }
-
-    location /studio/ {
-        proxy_pass http://127.0.0.1:8080/;
-        proxy_set_header Host \$host;
     }
 }
 NGINXEOF
