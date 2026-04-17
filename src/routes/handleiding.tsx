@@ -405,12 +405,19 @@ ssh -T -i ~/.ssh/deploy_key git@github.com`}</CodeBlock>
         <Step id="installatie" number={steps.findIndex(s => s.id === "installatie") + 1} title={<>Installatie <StepBadge type="verplicht" /></>}>
           <Location icon="terminal" text="Terminal op je VM" />
 
-          <p><strong>Stap 1:</strong> Clone de <strong>infra-repo</strong> (publiek, geen key nodig):</p>
-          <CodeBlock fill={fill}>{`# Clone de infra-repo via HTTPS (geen deploy key nodig)
-sudo git clone INFRA-REPO-URL /opt/lovable-infra`}</CodeBlock>
+          <p><strong>Eén commando installeert alles</strong> — infra, Supabase, Nginx, SSL, je app én eventuele app-eigen scripts (edge functions, cronjobs):</p>
+          <CodeBlock fill={fill}>{`curl -fsSL https://raw.githubusercontent.com/BartBrouwerHOI/my-sweet-data-hub/main/bootstrap.sh | sudo bash`}</CodeBlock>
 
-          <p><strong>Stap 2:</strong> Start de installer:</p>
-          <CodeBlock fill={fill}>{`sudo bash /opt/lovable-infra/install.sh`}</CodeBlock>
+          <p className="text-sm text-muted-foreground">Het bootstrap-script installeert <code>git</code>/<code>curl</code> als die ontbreken, cloned de infra-repo naar <CopyCode fill={fill}>/opt/lovable-infra</CopyCode> en start de installer interactief.</p>
+
+          <details className="mt-2 rounded-md border border-border bg-muted/30 p-3">
+            <summary className="cursor-pointer text-sm font-medium">Geavanceerd: handmatig clonen</summary>
+            <div className="mt-2 space-y-2 text-sm">
+              <p>Liever zelf de repo clonen?</p>
+              <CodeBlock fill={fill}>{`sudo git clone INFRA-REPO-URL /opt/lovable-infra
+sudo bash /opt/lovable-infra/install.sh`}</CodeBlock>
+            </div>
+          </details>
 
           <p>Het script vraagt om:</p>
           <ul className="list-inside list-disc space-y-1">
