@@ -71,8 +71,9 @@ Browser → Nginx (SSL/443)
 
 | Bestand | Doel |
 |---------|------|
-| `install.sh` | Hoofdinstaller v3.0 — detecteert distro (Debian/RHEL), vraagt input, installeert Docker, genereert JWT secrets, cloned app-repo, bouwt frontend, start Supabase, configureert Nginx + SSL + firewall, schrijft `lovable-update` commando |
-| `update.sh` | Standalone fallback als `lovable-update` niet bestaat. Leest `.install_mode` marker om de juiste update-stappen te kiezen |
+| `bootstrap.sh` | **Eén-commando installer** — installeert git/curl, cloned infra-repo naar `/opt/lovable-infra`, start `install.sh`. Bedoeld voor `curl ... \| sudo bash` |
+| `install.sh` | Hoofdinstaller — detecteert distro (Debian/RHEL), vraagt input, installeert Docker, genereert JWT secrets, cloned app-repo, bouwt frontend, start Supabase, configureert Nginx + SSL + firewall, schrijft `lovable-update`. Roept aan het eind automatisch `$APP_DIR/scripts/bootstrap.sh` en `$APP_DIR/scripts/lovable-update.sh` aan als die bestaan (app-eigen edge functions / cronjobs) |
+| `update.sh` | Standalone fallback als `lovable-update` niet bestaat. Leest `.install_mode` marker; roept ook automatisch `$APP_DIR/scripts/lovable-update.sh` aan na elke update |
 
 ### Docker
 
