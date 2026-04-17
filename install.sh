@@ -1317,6 +1317,12 @@ if [[ -f "\$INFRA_DIR/volumes/kong/kong.yml" && -f "\$SUPABASE_DIR/.env" ]]; the
   fi
 fi
 
+# --- App-eigen update-script (edge functions sync) ---
+if [[ -f "\$APP_DIR/scripts/lovable-update.sh" ]]; then
+  echo "[app] App-eigen lovable-update.sh draaien..."
+  bash "\$APP_DIR/scripts/lovable-update.sh" || echo "  ⚠️  app-script gaf een fout"
+fi
+
 echo ""
 echo "✅ Update compleet!"
 UPDATEEOF
