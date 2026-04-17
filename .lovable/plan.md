@@ -1,64 +1,43 @@
 
 
-## Doel
+## Wat de gebruiker vraagt
 
-Eén commando dat **alles** doet: infra + app + edge functions + secrets. Geen handmatige clones, geen tweede script.
+"Wat kan ik aan de app-repo (Access-Guardian) doorgeven over wat **wij** (infra) doen en wat **zij** (app) moeten doen?" — dus: een duidelijk contract / handover-document dat de app-developer kan lezen om hun migraties + scripts correct te maken.
 
-## Voorgestelde flow
+## Antwoord-strategie
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/BartBrouwerHOI/my-sweet-data-hub/main/bootstrap.sh | sudo bash
-```
+Ik geef een kant-en-klare **"Contract voor app-repo's"** tekst die je 1-op-1 kunt doorsturen of in de Access-Guardian README/docs kunt plakken. Geen code-wijzigingen nodig — dit is puur communicatie.
 
-Dat is het. De rest is interactief (paar prompts: domein, e-mail, app-repo URL).
+Daarnaast bied ik aan om dit contract als markdown-bestand (`docs/APP-CONTRACT.md`) in deze infra-repo te zetten zodat het altijd vindbaar is en je er gewoon naar kunt linken.
 
-## Hoe het werkt onder water
+## Inhoud van het contract (samenvatting)
 
-```text
-bootstrap.sh (curl-pipe, ~20 regels)
-  ├─ installeert git als die ontbreekt
-  ├─ git clone infra-repo → /opt/lovable-infra
-  └─ exec /opt/lovable-infra/install.sh
+**Wat de infra-repo (`my-sweet-data-hub`) regelt:**
+- Postgres, Auth (GoTrue), PostgREST, Kong, Storage, Realtime
+- Docker, Nginx, SSL (Let's Encrypt), Firewall
+- Frontend build (SPA of SSR autodetect)
+- Migratie-runner (`supabase/migrations/*.sql` op alfabetische volgorde)
+- Tracking via `.migrations_done/` (geen dubbel draaien)
+- Aanroep van `$APP_DIR/scripts/bootstrap.sh` + `lovable-update.sh` als die bestaan
 
-install.sh (bestaand, generiek)
-  ├─ vraagt: modus, domein, e-mail, wachtwoord, app-repo URL
-  ├─ installeert: docker, nginx, certbot
-  ├─ zet Supabase stack neer (Postgres, Auth, Kong, Storage, Realtime)
-  ├─ cloned app-repo → /opt/lovable-app
-  ├─ bouwt frontend container (SPA of SSR auto-detect)
-  ├─ draait migraties uit app-repo
-  └─ NIEUW: detecteert app-eigen scripts en draait ze automatisch
-       ├─ als $APP_DIR/scripts/bootstrap.sh bestaat → draaien
-       └─ als $APP_DIR/scripts/lovable-update.sh bestaat → draaien
-       (edge functions, app-secrets, cronjobs — alles app-eigen)
-```
-
-## Waarom dit schoon blijft
-
-| Verantwoordelijkheid | Waar |
-|---|---|
-| Docker, Nginx, SSL, Supabase stack | **infra-repo** (generiek) |
-| Frontend build templates (Dockerfile, nginx.conf) | **infra-repo** (generiek) |
-| Edge functions code, app-secrets, cronjobs | **app-repo** (`scripts/`) |
-| Aanroepen van app-scripts | **infra-repo** detecteert + draait |
-
-Onze installer hardcodeert **geen** Access-Guardian URLs. Hij kijkt alleen of `$APP_DIR/scripts/bootstrap.sh` of `$APP_DIR/scripts/lovable-update.sh` bestaat. Werkt dus voor élke app die deze conventie volgt.
+**Wat de app-repo (Access-Guardian) zelf moet regelen:**
+1. **Idempotente migraties** — geen hardcoded user_ids, gebruik `IF NOT EXISTS`, `ON CONFLICT DO NOTHING`, `WHERE EXISTS (...)` guards
+2. **Geen FK-violations op verse DB** — een verse install heeft géén users/profiles; seed-data moet defensief zijn of in een aparte seed-migratie die alleen draait als de tabel leeg is
+3. **Eerste-admin-pattern** — gebruik een trigger op `auth.users` (eerste user wordt admin) i.p.v. hardcoded ID
+4. **Edge functions setup** in `scripts/bootstrap.sh` (eenmalig: edge-runtime container, Kong-route, secrets)
+5. **Edge functions sync** in `scripts/lovable-update.sh` (recurring: code sync + restart)
+6. **Geen hardcoded URLs naar Lovable Cloud** — gebruik `VITE_SUPABASE_URL` env-var
+7. **App-secrets** in `scripts/bootstrap.sh` (vraag interactief of lees uit env)
 
 ## Wijzigingen
 
 | Bestand | Wijziging |
 |---|---|
-| `bootstrap.sh` (nieuw, repo-root) | ~20 regels: git installeren, infra-repo clonen, `install.sh` aanroepen |
-| `install.sh` | Aan het eind (na "INSTALLATIE COMPLEET"): detecteer `$APP_DIR/scripts/bootstrap.sh` en `lovable-update.sh`, vraag bevestiging "Nu app-specifieke setup draaien? [Y/n]", draai ze |
-| `update.sh` + gegenereerde `/usr/local/bin/lovable-update` | Idem: na infra+app update, als `$APP_DIR/scripts/lovable-update.sh` bestaat → automatisch aanroepen |
-| `INSTALL.md` | Eén-commando install bovenaan als primaire flow; oude 2-staps blijft als fallback |
-| `src/routes/handleiding.tsx` | Eén-commando install tonen; oude flow als "geavanceerd" inklapbaar |
+| `docs/APP-CONTRACT.md` (nieuw) | Volledig contract: wat infra doet, wat app moet doen, do's & don'ts voor migraties, scripts-conventie, voorbeelden van defensieve SQL-patterns |
+| `INSTALL.md` | Korte verwijzing toevoegen: "Bouw je een app-repo die hierop draait? Lees `docs/APP-CONTRACT.md`" |
+| `src/routes/handleiding.tsx` | Link naar het contract in de troubleshooting-sectie + nieuwe FAQ "Mijn migratie faalt op verse DB" |
 
-## Resultaat voor de gebruiker
+## Resultaat
 
-**Voor:** clone infra → install.sh → handmatig bootstrap.sh van app → handmatig lovable-update.sh van app = **4 commando's**
-
-**Na:** `curl ... | sudo bash` → paar prompts beantwoorden → één bevestiging "edge functions ook installeren? Y" = **1 commando + interactie**
-
-Bij elke toekomstige update geldt hetzelfde: `lovable-update` doet infra + app + edge functions in één klap.
+Je hebt één URL die je naar Access-Guardian (of welke andere Lovable-app dan ook) kunt sturen: `github.com/.../my-sweet-data-hub/blob/main/docs/APP-CONTRACT.md`. Daar staat exact wat zij moeten leveren zodat hun app probleemloos op onze infra draait — inclusief het soort fix dat de zojuist gefaalde migratie nodig heeft.
 
