@@ -1500,7 +1500,11 @@ main() {
       start_supabase
       if ! run_migrations; then
         migration_failed=true
-...
+      fi
+      start_frontend
+      ;;
+    database)
+      generate_secrets
       setup_supabase
       start_supabase
       if ! run_migrations; then
