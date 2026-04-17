@@ -1006,6 +1006,12 @@ if [[ -n "\${_kong_anon:-}" ]]; then
   [[ "\$_hc" != "200" ]] && echo "  ⚠️  Kong health-check gaf HTTP \$_hc (verwacht 200)"
 fi
 
+# --- App-eigen update-script (edge functions sync) ---
+if [[ -f "\$APP_DIR/scripts/lovable-update.sh" ]]; then
+  echo "[app] App-eigen lovable-update.sh draaien..."
+  bash "\$APP_DIR/scripts/lovable-update.sh" || echo "  ⚠️  app-script gaf een fout"
+fi
+
 echo ""
 echo "✅ Update compleet!"
 UPDATEEOF
@@ -1081,6 +1087,12 @@ docker run -d \\
   --restart unless-stopped \\
   -p 3000:3000 \\
   lovable-frontend
+
+# --- App-eigen update-script (edge functions sync) ---
+if [[ -f "\$APP_DIR/scripts/lovable-update.sh" ]]; then
+  echo "[app] App-eigen lovable-update.sh draaien..."
+  bash "\$APP_DIR/scripts/lovable-update.sh" || echo "  ⚠️  app-script gaf een fout"
+fi
 
 echo ""
 echo "✅ Update compleet!"
@@ -1180,6 +1192,12 @@ _SYNCEOF
     --restart unless-stopped \\
     -p 3000:3000 \\
     lovable-frontend
+
+  # --- App-eigen update-script (edge functions sync) ---
+  if [[ -f "\$APP_DIR/scripts/lovable-update.sh" ]]; then
+    echo "[app] App-eigen lovable-update.sh draaien..."
+    bash "\$APP_DIR/scripts/lovable-update.sh" || echo "  ⚠️  app-script gaf een fout"
+  fi
 
   echo ""
   echo "✅ Update compleet (app-only)!"
@@ -1307,6 +1325,12 @@ if [[ -f "\$INFRA_DIR/volumes/kong/kong.yml" && -f "\$SUPABASE_DIR/.env" ]]; the
   fi
 fi
 
+# --- App-eigen update-script (edge functions sync) ---
+if [[ -f "\$APP_DIR/scripts/lovable-update.sh" ]]; then
+  echo "[app] App-eigen lovable-update.sh draaien..."
+  bash "\$APP_DIR/scripts/lovable-update.sh" || echo "  ⚠️  app-script gaf een fout"
+fi
+
 echo ""
 echo "✅ Update compleet!"
 UPDATEEOF
@@ -1377,21 +1401,40 @@ print_summary() {
   echo -e "  🔄 Updates: ${YELLOW}lovable-update${NC}"
   echo ""
 
-  # --- Edge functions detectie ---
-  if [[ -d "$APP_DIR/supabase/functions" ]] && [[ "$INSTALL_MODE" != "database" ]]; then
-    echo -e "${YELLOW}╔══════════════════════════════════════════════╗${NC}"
-    echo -e "${YELLOW}║  ⚡ Edge Functions gedetecteerd in je app    ║${NC}"
-    echo -e "${YELLOW}╚══════════════════════════════════════════════╝${NC}"
-    echo ""
-    echo "  Je app bevat edge functions in supabase/functions/."
-    echo "  Onze installer regelt de basis-infra; de app-repo levert zijn"
-    echo "  eigen deploy-scripts (met app-specifieke secrets en routes)."
-    echo ""
-    echo "  Draai deze 2 commando's om de functions te activeren:"
-    echo ""
-    echo -e "    ${GREEN}curl -fsSL https://raw.githubusercontent.com/BartBrouwerHOI/Access-Guardian/main/scripts/bootstrap.sh | sudo bash${NC}"
-    echo -e "    ${GREEN}sudo bash $APP_DIR/scripts/lovable-update.sh${NC}"
-    echo ""
+  # --- App-eigen setup-scripts automatisch detecteren en draaien ---
+  # Conventie: app-repo levert scripts/bootstrap.sh (eenmalige setup: edge runtime,
+  # secrets, routes) en/of scripts/lovable-update.sh (functions sync). Onze installer
+  # blijft generiek — hij kijkt alleen of deze bestanden bestaan en biedt aan ze te draaien.
+  if [[ "$INSTALL_MODE" != "database" ]] && [[ -d "$APP_DIR" ]]; then
+    local app_bootstrap="$APP_DIR/scripts/bootstrap.sh"
+    local app_update="$APP_DIR/scripts/lovable-update.sh"
+    if [[ -f "$app_bootstrap" ]] || [[ -f "$app_update" ]]; then
+      echo -e "${YELLOW}╔══════════════════════════════════════════════╗${NC}"
+      echo -e "${YELLOW}║  ⚡ App-eigen setup-scripts gedetecteerd      ║${NC}"
+      echo -e "${YELLOW}╚══════════════════════════════════════════════╝${NC}"
+      echo ""
+      [[ -f "$app_bootstrap" ]] && echo -e "  • $app_bootstrap"
+      [[ -f "$app_update" ]]    && echo -e "  • $app_update"
+      echo ""
+      echo "  Deze scripts horen bij je app (edge functions, secrets, cronjobs)."
+      read -p "  Nu automatisch draaien? [Y/n] " _run_app_scripts
+      if [[ ! "$_run_app_scripts" =~ ^[nN]$ ]]; then
+        if [[ -f "$app_bootstrap" ]]; then
+          echo -e "  ${GREEN}→ $app_bootstrap${NC}"
+          bash "$app_bootstrap" || echo -e "  ${YELLOW}⚠️  bootstrap.sh gaf een fout — controleer output hierboven${NC}"
+        fi
+        if [[ -f "$app_update" ]]; then
+          echo -e "  ${GREEN}→ $app_update${NC}"
+          bash "$app_update" || echo -e "  ${YELLOW}⚠️  lovable-update.sh gaf een fout — controleer output hierboven${NC}"
+        fi
+        echo -e "  ${GREEN}✅ App-setup voltooid${NC}"
+      else
+        echo "  Overgeslagen. Je kunt ze later handmatig draaien:"
+        [[ -f "$app_bootstrap" ]] && echo "    sudo bash $app_bootstrap"
+        [[ -f "$app_update" ]]    && echo "    sudo bash $app_update"
+      fi
+      echo ""
+    fi
   fi
 }
 
@@ -1457,7 +1500,11 @@ main() {
       start_supabase
       if ! run_migrations; then
         migration_failed=true
-...
+      fi
+      start_frontend
+      ;;
+    database)
+      generate_secrets
       setup_supabase
       start_supabase
       if ! run_migrations; then

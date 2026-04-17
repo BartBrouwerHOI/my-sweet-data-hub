@@ -26,17 +26,18 @@ Het script detecteert automatisch of je app een **SPA** (Vite + React) of **SSR*
 | Netwerk | Publiek IP-adres |
 | Domeinnaam | Aanbevolen (voor SSL) |
 
-## Snelle Installatie
+## Snelle Installatie (één commando)
 
 ```bash
-# 1. Clone de infra-repo (publiek, geen key nodig)
-git clone INFRA-REPO-URL /opt/lovable-infra
-
-# 2. Start de installer (vraagt om de SSH URL van je APP-repo)
-sudo bash /opt/lovable-infra/install.sh
+curl -fsSL https://raw.githubusercontent.com/BartBrouwerHOI/my-sweet-data-hub/main/bootstrap.sh | sudo bash
 ```
 
-Het script vraagt om:
+Dat is het. Het script:
+1. Installeert `git` + `curl` als die ontbreken
+2. Cloned de infra-repo naar `/opt/lovable-infra`
+3. Start `install.sh` — die regelt de Supabase-stack, Nginx, SSL, je app-repo én roept aan het eind automatisch app-eigen scripts aan (`scripts/bootstrap.sh` en `scripts/lovable-update.sh` als die in je app-repo bestaan — voor edge functions, secrets, cronjobs)
+
+De installer vraagt interactief om:
 - **Installatiemodus** — full / database / frontend
 - **Domeinnaam** — of laat leeg voor IP
 - **Admin e-mail** — voor SSL certificaten
@@ -44,6 +45,15 @@ Het script vraagt om:
 - **GitHub repo URL** — SSH URL van je **app-project** (privé)
 
 > **Tip:** De infra-repo is publiek — je hebt alleen een deploy key nodig voor je privé app-repo.
+
+### Geavanceerd: handmatig clonen
+
+Liever zelf controle? Kan ook:
+
+```bash
+git clone https://github.com/BartBrouwerHOI/my-sweet-data-hub /opt/lovable-infra
+sudo bash /opt/lovable-infra/install.sh
+```
 
 ## Updates
 
@@ -77,21 +87,20 @@ sudo bash /opt/lovable-infra/install.sh --refresh-updater
 | `lovable-update --mark-done <file>` | Markeer een migratie als uitgevoerd zonder deze te draaien |
 | `install.sh --refresh-updater` | Vernieuw het `lovable-update` commando zonder herinstallatie |
 
-## Edge Functions (app-specifiek)
+## Edge Functions & app-eigen setup (automatisch)
 
-Onze installer is **generiek** — hij zet Postgres, Auth, Kong, Storage en Realtime neer voor élk Lovable-project. **Edge functions** zijn app-specifiek (eigen secrets, eigen routes, eigen deploy-logica) en horen daarom in de **app-repo** zelf.
+Onze installer is **generiek** — hij zet Postgres, Auth, Kong, Storage en Realtime neer voor élk Lovable-project. **App-eigen zaken** (edge functions, secrets, cronjobs) horen in de **app-repo** zelf via de conventie:
 
-Als je app een `supabase/functions/` map bevat, detecteert `install.sh` dat aan het eind en toont de 2 commando's die je moet draaien om ze te activeren. Voor Access-Guardian zijn dat:
+- `scripts/bootstrap.sh` — eenmalige setup (edge-runtime container, Kong-route, secrets)
+- `scripts/lovable-update.sh` — sync van functions code, herstart runtime
+
+Aan het eind van de installatie detecteert `install.sh` deze scripts in `/opt/lovable-app/scripts/` en biedt aan ze automatisch te draaien. Bij elke `lovable-update` wordt `scripts/lovable-update.sh` óók automatisch aangeroepen — geen handwerk meer.
+
+Wil je het handmatig draaien (bijv. na het toevoegen van een nieuwe function):
 
 ```bash
-# 1. Voegt edge-runtime container + Kong-route + secrets toe
-curl -fsSL https://raw.githubusercontent.com/BartBrouwerHOI/Access-Guardian/main/scripts/bootstrap.sh | sudo bash
-
-# 2. Sync't de functions code en herstart de runtime
 sudo bash /opt/lovable-app/scripts/lovable-update.sh
 ```
-
-Bij toekomstige function-wijzigingen draai je alleen het tweede commando opnieuw — de infra blijft staan.
 
 ## Interactieve Handleiding
 
