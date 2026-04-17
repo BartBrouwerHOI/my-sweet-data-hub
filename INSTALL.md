@@ -26,17 +26,18 @@ Het script detecteert automatisch of je app een **SPA** (Vite + React) of **SSR*
 | Netwerk | Publiek IP-adres |
 | Domeinnaam | Aanbevolen (voor SSL) |
 
-## Snelle Installatie
+## Snelle Installatie (één commando)
 
 ```bash
-# 1. Clone de infra-repo (publiek, geen key nodig)
-git clone INFRA-REPO-URL /opt/lovable-infra
-
-# 2. Start de installer (vraagt om de SSH URL van je APP-repo)
-sudo bash /opt/lovable-infra/install.sh
+curl -fsSL https://raw.githubusercontent.com/BartBrouwerHOI/my-sweet-data-hub/main/bootstrap.sh | sudo bash
 ```
 
-Het script vraagt om:
+Dat is het. Het script:
+1. Installeert `git` + `curl` als die ontbreken
+2. Cloned de infra-repo naar `/opt/lovable-infra`
+3. Start `install.sh` — die regelt de Supabase-stack, Nginx, SSL, je app-repo én roept aan het eind automatisch app-eigen scripts aan (`scripts/bootstrap.sh` en `scripts/lovable-update.sh` als die in je app-repo bestaan — voor edge functions, secrets, cronjobs)
+
+De installer vraagt interactief om:
 - **Installatiemodus** — full / database / frontend
 - **Domeinnaam** — of laat leeg voor IP
 - **Admin e-mail** — voor SSL certificaten
@@ -44,6 +45,15 @@ Het script vraagt om:
 - **GitHub repo URL** — SSH URL van je **app-project** (privé)
 
 > **Tip:** De infra-repo is publiek — je hebt alleen een deploy key nodig voor je privé app-repo.
+
+### Geavanceerd: handmatig clonen
+
+Liever zelf controle? Kan ook:
+
+```bash
+git clone https://github.com/BartBrouwerHOI/my-sweet-data-hub /opt/lovable-infra
+sudo bash /opt/lovable-infra/install.sh
+```
 
 ## Updates
 
