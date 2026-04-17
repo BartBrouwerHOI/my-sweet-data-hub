@@ -251,6 +251,7 @@ if [[ "$INSTALL_MODE" == "database" ]]; then
   cd "$SUPABASE_DIR" && docker compose up -d
   docker compose up -d --force-recreate kong >/dev/null 2>&1 || true
   kong_health_check
+  run_app_update_script
 
   echo ""
   echo -e "${GREEN}✅ Update compleet (database)!${NC}"
@@ -294,6 +295,8 @@ if [[ "$INSTALL_MODE" == "frontend" ]]; then
     -p 3000:3000 \
     lovable-frontend
 
+  run_app_update_script
+
   echo ""
   echo -e "${GREEN}✅ Update compleet (frontend)!${NC}"
   exit 0
@@ -332,6 +335,8 @@ if [[ "$APP_ONLY" == true ]]; then
     --restart unless-stopped \
     -p 3000:3000 \
     lovable-frontend
+
+  run_app_update_script
 
   echo ""
   echo -e "${GREEN}✅ Update compleet (app-only)!${NC}"
@@ -385,6 +390,7 @@ fi
 render_kong_config
 (cd "$SUPABASE_DIR" && docker compose up -d --force-recreate kong >/dev/null 2>&1) || true
 kong_health_check
+run_app_update_script
 
 echo ""
 echo -e "${GREEN}✅ Update compleet!${NC}"
