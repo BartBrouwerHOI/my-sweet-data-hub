@@ -1191,6 +1191,12 @@ _SYNCEOF
     -p 3000:3000 \\
     lovable-frontend
 
+  # --- App-eigen update-script (edge functions sync) ---
+  if [[ -f "\$APP_DIR/scripts/lovable-update.sh" ]]; then
+    echo "[app] App-eigen lovable-update.sh draaien..."
+    bash "\$APP_DIR/scripts/lovable-update.sh" || echo "  ⚠️  app-script gaf een fout"
+  fi
+
   echo ""
   echo "✅ Update compleet (app-only)!"
   exit 0
