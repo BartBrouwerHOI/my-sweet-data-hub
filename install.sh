@@ -1097,6 +1097,8 @@ fi
 echo ""
 echo "✅ Update compleet!"
 UPDATEEOF
+  else
+    cat > /usr/local/bin/lovable-update <<UPDATEEOF
 #!/bin/bash
 set -euo pipefail
 
