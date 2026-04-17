@@ -1006,6 +1006,12 @@ if [[ -n "\${_kong_anon:-}" ]]; then
   [[ "\$_hc" != "200" ]] && echo "  ⚠️  Kong health-check gaf HTTP \$_hc (verwacht 200)"
 fi
 
+# --- App-eigen update-script (edge functions sync) ---
+if [[ -f "\$APP_DIR/scripts/lovable-update.sh" ]]; then
+  echo "[app] App-eigen lovable-update.sh draaien..."
+  bash "\$APP_DIR/scripts/lovable-update.sh" || echo "  ⚠️  app-script gaf een fout"
+fi
+
 echo ""
 echo "✅ Update compleet!"
 UPDATEEOF
