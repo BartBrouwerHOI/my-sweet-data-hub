@@ -71,8 +71,9 @@ Browser → Nginx (SSL/443)
 
 | Bestand | Doel |
 |---------|------|
-| `install.sh` | Hoofdinstaller v3.0 — detecteert distro (Debian/RHEL), vraagt input, installeert Docker, genereert JWT secrets, cloned app-repo, bouwt frontend, start Supabase, configureert Nginx + SSL + firewall, schrijft `lovable-update` commando |
-| `update.sh` | Standalone fallback als `lovable-update` niet bestaat. Leest `.install_mode` marker om de juiste update-stappen te kiezen |
+| `bootstrap.sh` | **Eén-commando installer** — installeert git/curl, cloned infra-repo naar `/opt/lovable-infra`, start `install.sh`. Bedoeld voor `curl ... \| sudo bash` |
+| `install.sh` | Hoofdinstaller — detecteert distro (Debian/RHEL), vraagt input, installeert Docker, genereert JWT secrets, cloned app-repo, bouwt frontend, start Supabase, configureert Nginx + SSL + firewall, schrijft `lovable-update`. Roept aan het eind automatisch `$APP_DIR/scripts/bootstrap.sh` en `$APP_DIR/scripts/lovable-update.sh` aan als die bestaan (app-eigen edge functions / cronjobs) |
+| `update.sh` | Standalone fallback als `lovable-update` niet bestaat. Leest `.install_mode` marker; roept ook automatisch `$APP_DIR/scripts/lovable-update.sh` aan na elke update |
 
 ### Docker
 
@@ -117,9 +118,9 @@ De `fill()` functie vervangt placeholders in alle codeblokken:
 1. Vereisten
 2. Architectuur
 3. GitHub deploy key instellen
-4. Installatie (clone infra + run install.sh)
+4. Installatie (één commando: `curl ... | sudo bash` → bootstrap → install.sh)
 5. Na installatie (checks + troubleshooting link)
-6. Updates draaien (`lovable-update`)
+6. Updates draaien (`lovable-update` — roept ook automatisch app-eigen `scripts/lovable-update.sh` aan)
 7. Data migreren uit Lovable Cloud (optioneel)
 8. SMTP & OAuth instellen
 9. Troubleshooting
@@ -140,6 +141,8 @@ Zelfde, maar stap 4 wordt: Server A (database) + Server B (frontend)
 8. **Autodetectie Debian vs RHEL** — via `/etc/os-release`, kiest juiste package manager en firewall
 9. **IP-detectie bij domeinnaam** — als een IP-adres wordt ingevuld bij "Domeinnaam" schakelt het script automatisch naar HTTP (geen SSL). Let's Encrypt kan geen certificaten uitgeven voor IP-adressen.
 10. **Migratie-fouten blokkeren succes** — als een app-migratie faalt, meldt het script "INSTALLATIE DEELS VOLTOOID" in plaats van vals succes
+11. **Eén-commando install via `bootstrap.sh`** — gebruiker hoeft niets meer handmatig te clonen; `curl ... | sudo bash` regelt git-install, repo-clone en installer-start in één
+12. **App-eigen scripts conventie (`$APP_DIR/scripts/`)** — infra-repo blijft 100% generiek; app-specifieke setup (edge functions, secrets, cronjobs) levert de app-repo zelf via `scripts/bootstrap.sh` (eenmalig) en `scripts/lovable-update.sh` (recurring). Onze installer detecteert + draait ze automatisch zonder hardcoded URLs
 
 ## Tech stack
 
