@@ -102,6 +102,10 @@ Wil je het handmatig draaien (bijv. na het toevoegen van een nieuwe function):
 sudo bash /opt/lovable-app/scripts/lovable-update.sh
 ```
 
+## 📘 Bouw je een app-repo voor deze infra?
+
+Lees [`docs/APP-CONTRACT.md`](docs/APP-CONTRACT.md) — daar staat exact wat de app-repo moet leveren (idempotente migraties, `scripts/` conventie, env-vars) zodat hij probleemloos op deze infra draait. Stuur die link door aan je Lovable-app developer.
+
 ## Interactieve Handleiding
 
 Dit project bevat een uitgebreide interactieve handleiding op `/handleiding` met:
