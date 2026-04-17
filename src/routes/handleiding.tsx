@@ -448,11 +448,7 @@ sudo bash /opt/lovable-infra/install.sh`}</CodeBlock>
         <Step id="split-backend" number={steps.findIndex(s => s.id === "split-backend") + 1} title="Server A — Supabase backend">
           <Location icon="terminal" text="Terminal op Server A" />
           <p>Op Server A draai je de volledige Supabase stack (database, login, API, opslag):</p>
-          <CodeBlock fill={fill}>{`# Clone de infra-repo via HTTPS (geen deploy key nodig)
-sudo git clone INFRA-REPO-URL /opt/lovable-infra
-
-# Start de installer
-sudo bash /opt/lovable-infra/install.sh`}</CodeBlock>
+          <CodeBlock fill={fill}>{`curl -fsSL https://raw.githubusercontent.com/BartBrouwerHOI/my-sweet-data-hub/main/bootstrap.sh | sudo bash`}</CodeBlock>
 
           <p>Het script vraagt om:</p>
           <ul className="list-inside list-disc space-y-1">
@@ -487,11 +483,7 @@ sudo firewall-cmd --reload`}</CodeBlock>
         <Step id="split-frontend" number={steps.findIndex(s => s.id === "split-frontend") + 1} title="Server B — React frontend">
           <Location icon="terminal" text="Terminal op Server B" />
           <p>Op Server B draait alleen de React app — geen database, geen Supabase services:</p>
-          <CodeBlock fill={fill}>{`# Clone de infra-repo via HTTPS (geen deploy key nodig)
-sudo git clone INFRA-REPO-URL /opt/lovable-infra
-
-# Start de installer
-sudo bash /opt/lovable-infra/install.sh`}</CodeBlock>
+          <CodeBlock fill={fill}>{`curl -fsSL https://raw.githubusercontent.com/BartBrouwerHOI/my-sweet-data-hub/main/bootstrap.sh | sudo bash`}</CodeBlock>
           <p>Het script stelt de volgende vragen:</p>
           <ul className="list-disc pl-6 space-y-1">
             <li>Installatiemodus → kies <strong>3) Alleen frontend</strong></li>
