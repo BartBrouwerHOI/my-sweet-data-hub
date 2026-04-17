@@ -153,6 +153,15 @@ kong_health_check() {
 
 # (Generieke updater — geen app-specifieke migratie-patches.)
 
+# --- App-eigen update-script aanroepen (edge functions sync, app-secrets, cronjobs) ---
+run_app_update_script() {
+  if [[ -f "$APP_DIR/scripts/lovable-update.sh" ]]; then
+    echo -e "${BLUE}[app]${NC} App-eigen lovable-update.sh draaien..."
+    bash "$APP_DIR/scripts/lovable-update.sh" \
+      || echo -e "  ${YELLOW}⚠️  app-script gaf een fout — controleer output${NC}"
+  fi
+}
+
 # --- Strikte migratie-runner (gedeeld) ---
 run_strict_migrations() {
   if [[ ! -d "$APP_DIR/supabase/migrations" ]]; then return 0; fi
